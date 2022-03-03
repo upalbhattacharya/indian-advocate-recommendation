@@ -40,6 +40,9 @@ aniket_classification.py
 **/node_modules/*
 **/__pycache__*
 
+# notebooks
+*/notebooks*
+
 # Files Larger than 20M
 archived/data_generated/catchphrase_jaccard_similarity_Supreme_court_texts_10/fit_doc.json
 archived/data_generated/catchphrase_jaccard_similarity_all/adv-m.p.singh-cases-docs_intersect.txt
