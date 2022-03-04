@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 # Birth: 2022-03-01 15:34:44.105743638 +0530
-# Modify: 2022-03-02 12:24:10.511405461 +0530
+# Modify: 2022-03-04 11:25:17.638002986 +0530
 
 """Training and evaluation methods for model."""
 
@@ -74,6 +74,14 @@ def train_one_epoch(model, optimizer, loss_fn, data_loader, params,
         del outputs_batch
         del targets_batch
         del y_pred
+        torch.cuda.empty_cache()
+
+    else:
+        # for last batch if it does not update the parameter weights
+        if (i + 1) % params.update_grad_every != 0:
+            optimizer.step()
+            optimizer.zero_grad()
+            loss_batch.append(loss.item())
 
     outputs, targets = accumulate()
     summary_batch = {metric: metrics[metric](outputs, targets)
@@ -163,7 +171,7 @@ def train_and_evaluate(model, optimizer, loss_fn, train_loader,
             best_json_path = os.path.join(
                     exp_dir, "metrics", f"{name}", "test",
                     "best_test_f1.json")
-            utils.save_dict_to_json(train_stats, best_json_path)
+            utils.save_dict_to_json(test_stats, best_json_path)
 
         state = {
                 'epoch': epoch,
@@ -225,7 +233,7 @@ def main():
     if(args.device == "cuda"):
         torch.cuda.manual_seed(47)
 
-    # Setting the data paths 
+    # Setting the data path
     train_paths = [os.path.join(path, "train") for path in args.data_dirs]
     test_paths = [os.path.join(path, "test") for path in args.data_dirs]
 

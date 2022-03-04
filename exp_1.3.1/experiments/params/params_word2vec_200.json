@@ -8,6 +8,6 @@
     "save_every": 10,
     "max_sent_len": 100,
     "max_sent_num": 100,
-    "neg_ratio": 2,
+    "neg_ratio": 0,
     "update_grad_every": 32
 }

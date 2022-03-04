@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
-# Birth: 2022-02-22 19:36:33.904287717 +0530
-# Modify: 2022-02-24 13:39:32.960813634 +0530
+# Birth: 2022-03-01 15:34:44.119076971 +0530
+# Modify: 2022-03-04 22:57:40.675265673 +0530
 
 import numpy as np
 
@@ -24,7 +24,7 @@ def evaluate(model, loss_fn, data_loader, params, metrics, args):
     loss_batch = []
 
     criterion = loss_fn
-    for data, target in iter(data_loader.yield_batch()):
+    for data, target, _ in iter(data_loader.yield_batch()):
         data = data.to(args.device)
         target = target.to(args.device)
 
@@ -34,7 +34,8 @@ def evaluate(model, loss_fn, data_loader, params, metrics, args):
 
         # Output batch might need changing based on multi-class or
         # multi-label output
-        outputs_batch = (y_pred.data.cpu().numpy()).astype(np.int32)
+        outputs_batch = (y_pred.data.cpu().numpy()
+                         > params.threshold).astype(np.int32)
         targets_batch = (target.data.cpu().numpy()).astype(np.int32)
 
         accumulate.update(outputs_batch, targets_batch)
