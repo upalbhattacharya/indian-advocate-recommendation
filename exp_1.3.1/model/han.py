@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/python3
 # -*- encoding: utf8 -*-
-# Birth: 2022-02-09 20:07:12.147666632 +0530
-# Modify: 2022-02-24 17:34:44.263918173 +0530
+# Birth: 2022-03-01 15:34:37.229076934 +0530
+# Modify: 2022-03-01 15:34:37.375743601 +0530
 
 """
 Hierarchical model for processing long texts.
@@ -174,8 +174,6 @@ class SentAttn(nn.Module):
                 doc = torch.squeeze(doc, dim=0)
             # [1, num_sentences, 2 * hidden_dim]
             # -> [num_sentences, 2 * hidden_dim]
-            print(weights.shape)
-            print(doc.shape)
 
             doc_embed = torch.matmul(weights, doc)
             # [1, 2 * hidden_dim]

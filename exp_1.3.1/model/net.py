@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/python3
 # -*- encoding: utf-8 -*-
-# Birth: 2022-02-23 21:51:29.070946665 +0530
-# Modify: 2022-02-24 12:45:07.884200116 +0530
+# Birth: 2022-03-01 15:34:37.375743601 +0530
+# Modify: 2022-03-01 15:34:37.385743601 +0530
 
 """Prediction model of case offences using HAN."""
 
@@ -11,6 +11,8 @@ import torch
 import torch.nn as nn
 
 from .han import HAN
+
+from pathlib import Path
 
 
 class HANPrediction(nn.Module):

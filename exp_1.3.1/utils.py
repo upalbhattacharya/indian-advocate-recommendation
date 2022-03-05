@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
-# Birth: 2022-02-22 17:04:47.274411529 +0530
-# Modify: 2022-02-22 20:57:12.374310580 +0530
+# Birth: 2022-03-01 15:34:44.105743638 +0530
+# Modify: 2022-03-01 15:34:44.105743638 +0530
 
 """Utilities for the model."""
 
@@ -94,7 +94,7 @@ def save_checkpoint(state, is_best: bool, save_path: str,
 
 
 def load_checkpoint(restore_path: str, model: torch.nn.Module,
-                    optimizer: torch.optim) -> int:
+                    optimizer: torch.optim = None) -> int:
     """Load model checkpoint and optimizer and return epoch number.
 
     Parameters
