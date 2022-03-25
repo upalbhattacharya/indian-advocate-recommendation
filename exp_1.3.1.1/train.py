@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 # Birth: 2022-03-01 15:34:44.105743638 +0530
-# Modify: 2022-03-24 13:26:46.418121898 +0530
+# Modify: 2022-03-04 11:25:17.638002986 +0530
 
 """Training and evaluation methods for model."""
 
@@ -39,9 +39,6 @@ def train_one_epoch(model, optimizer, loss_fn, data_loader, params,
     # For accumulation of data for metrics
     accumulate = utils.Accumulate()
     loss_batch = []
-    
-    # Getting names of targets for visual understanding of saved metrics
-    target_names = data_loader.unique_labels
 
     criterion = loss_fn
     # Training loop for one epoch
@@ -87,7 +84,7 @@ def train_one_epoch(model, optimizer, loss_fn, data_loader, params,
             loss_batch.append(loss.item())
 
     outputs, targets = accumulate()
-    summary_batch = {metric: metrics[metric](outputs, targets, target_names)
+    summary_batch = {metric: metrics[metric](outputs, targets)
                      for metric in metrics}
     summary_batch["loss_avg"] = sum(loss_batch) * 1./len(loss_batch)
 
@@ -115,7 +112,7 @@ def train_and_evaluate(model, optimizer, loss_fn, train_loader,
         start_epoch = utils.load_checkpoint(restore_path, model, optimizer) + 1
     # Train over the required number of epochs
     for epoch in range(start_epoch, params.num_epochs):
-        logging.info(f"Logging for epoch {epoch + 1}.")
+        logging.info(f"Logging for epoch {epoch}.")
 
         _ = train_one_epoch(model, optimizer, loss_fn,
                             train_loader, params, metrics, args)
@@ -144,18 +141,17 @@ def train_and_evaluate(model, optimizer, loss_fn, train_loader,
         if (epoch % params.save_every == 0):
             train_json_path = os.path.join(
                     exp_dir, "metrics", f"{name}", "train",
-                    f"epoch_{epoch + 1}_train_f1.json")
+                    f"epoch_{epoch}_train_f1.json")
             utils.save_dict_to_json(train_stats, train_json_path)
 
             test_json_path = os.path.join(
                     exp_dir, "metrics", f"{name}", "test",
-                    f"epoch_{epoch + 1}_test_f1.json")
+                    f"epoch_{epoch}_test_f1.json")
             utils.save_dict_to_json(test_stats, test_json_path)
 
         # Save training stats if it is the best
         if is_train_best:
             best_train_macro_f1 = train_macro_f1
-            train_stats["epoch"] = (epoch + 1)
 
             best_json_path = os.path.join(
                     exp_dir, "metrics", f"{name}", "train",
@@ -165,7 +161,6 @@ def train_and_evaluate(model, optimizer, loss_fn, train_loader,
         # Save test stats if it is the best
         if is_test_best:
             best_test_macro_f1 = test_macro_f1
-            test_stats["epoch"] = (epoch + 1)
 
             logging.info(
                     (f"New best macro F1: {best_test_macro_f1:0.5f} "
@@ -179,7 +174,7 @@ def train_and_evaluate(model, optimizer, loss_fn, train_loader,
             utils.save_dict_to_json(test_stats, best_json_path)
 
         state = {
-                'epoch': epoch + 1,
+                'epoch': epoch,
                 'state_dict': model.state_dict(),
                 'optim_dict': optimizer.state_dict(),
                 }
@@ -188,13 +183,8 @@ def train_and_evaluate(model, optimizer, loss_fn, train_loader,
         utils.save_checkpoint(state, is_test_best,
                               os.path.join(exp_dir, "model_states",
                                            f"{name}"),
-                              (epoch + 1) % params.save_every == 0)
+                              epoch % params.save_every == 0)
 
-    # Checking and saving checkpoint for last epoch
-    utils.save_checkpoint(state, is_test_best,
-                          os.path.join(exp_dir, "model_states",
-                                       f"{name}"),
-                          True)
 
 def main():
     parser = argparse.ArgumentParser()
