@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 # Birth: 2022-03-01 15:34:44.105743638 +0530
-# Modify: 2022-03-24 13:26:46.418121898 +0530
+# Modify: 2022-03-24 13:51:06.338160890 +0530
 
 """Training and evaluation methods for model."""
 
@@ -39,7 +39,6 @@ def train_one_epoch(model, optimizer, loss_fn, data_loader, params,
     # For accumulation of data for metrics
     accumulate = utils.Accumulate()
     loss_batch = []
-    
     # Getting names of targets for visual understanding of saved metrics
     target_names = data_loader.unique_labels
 
@@ -196,6 +195,7 @@ def train_and_evaluate(model, optimizer, loss_fn, train_loader,
                                        f"{name}"),
                           True)
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--data_dirs", nargs="+", type=str,
@@ -217,6 +217,8 @@ def main():
                         help="Name of params file to load from exp_dir.")
     parser.add_argument("-de", "--device", type=str, default="cuda",
                         help="Device to train on.")
+    parser.add_argument("-id", "--device_id", type=int, default=0,
+                        help="Device ID to run on if using GPU.")
     parser.add_argument("-r", "--restore_file", default=None,
                         help=("Optional file to reload a saved model "
                               "and optimizer."))
@@ -229,6 +231,10 @@ def main():
     if not torch.cuda.is_available() and args.device == "cuda":
         logging.info("No CUDA cores/support found. Switching to cpu.")
         args.device = "cpu"
+
+    # Setting the device id
+    if args.device == "cuda":
+        args.device = f"cuda:{args.device_id}"
 
     logging.info(f"Device is {args.device}.")
 
