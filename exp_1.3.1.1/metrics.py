@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
-# Birth: 2022-02-24 11:20:52.497618061 +0530
-# Modify: 2022-02-24 13:51:02.480802383 +0530
+# Birth: 2022-03-01 15:34:44.089076971 +0530
+# Modify: 2022-03-01 15:34:44.105743638 +0530
 
 """Metrics to be calculated for the model."""
 
@@ -17,7 +17,7 @@ __email__ = "upal.bhattacharya@gmail.com"
 
 
 def f1(outputs_batch: MutableSequence,
-       targets_batch: MutableSequence) -> dict:
+       targets_batch: MutableSequence, target_names: list[str]) -> dict:
     """Calculate per class and macro F1 between the given predictions
     and targets
 
@@ -27,6 +27,8 @@ def f1(outputs_batch: MutableSequence,
         Predictions of a batch.
     targets_batch : MutableSequence
         Targets of the batch.
+    target_names  : list[str]
+        Names of targets.
 
     Returns
     -------
@@ -57,7 +59,16 @@ def f1(outputs_batch: MutableSequence,
 
     per_class_f1 = [num_val * 1./den_val if den_val != 0 else 0
                     for num_val, den_val in zip(num, den)]
+
     macro_f1 = sum(per_class_f1) * 1./len(per_class_f1)
+
+    # Converting metrics to dictionaries for easier understanding
+    per_class_prec = {
+            k: per_class_prec[i] for i, k in enumerate(target_names)}
+    per_class_rec = {
+            k: per_class_rec[i] for i, k in enumerate(target_names)}
+    per_class_f1 = {
+            k: per_class_f1[i] for i, k in enumerate(target_names)}
 
     scores = {
         'precision': per_class_prec,

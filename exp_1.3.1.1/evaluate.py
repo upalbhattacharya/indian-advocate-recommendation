@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 # Birth: 2022-03-01 15:34:44.119076971 +0530
-# Modify: 2022-03-04 22:57:40.675265673 +0530
+# Modify: 2022-03-24 13:08:14.204758845 +0530
 
 import numpy as np
 
@@ -22,6 +22,8 @@ def evaluate(model, loss_fn, data_loader, params, metrics, args):
     # Accumulate data of batches
     accumulate = utils.Accumulate()
     loss_batch = []
+
+    target_names = data_loader.unique_labels
 
     criterion = loss_fn
     for data, target, _ in iter(data_loader.yield_batch()):
@@ -50,7 +52,7 @@ def evaluate(model, loss_fn, data_loader, params, metrics, args):
     outputs, targets = accumulate()
 
     summary_batch = {metric: metrics[metric](outputs,
-                                             targets)
+                                             targets, target_names)
                      for metric in metrics}
     summary_batch['loss_avg'] = sum(loss_batch) * 1./(len(loss_batch))
 
