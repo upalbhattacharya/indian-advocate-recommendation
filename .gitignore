@@ -33,7 +33,7 @@
 aniket_classification.py
 
 # Data
-**/data*
+**/data/*
 **/experiments/model_states*
 **/experiments/metrics/*
 **/node_modules/*
