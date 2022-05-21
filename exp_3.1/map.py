@@ -2,7 +2,7 @@
 # -*- encoding: utf-8 -*-
 
 # Birth: 2022-04-25 14:56:01.174268562 +0530
-# Modify: 2022-05-02 12:00:34.134218251 +0530
+# Modify: 2022-05-11 09:56:33.287866532 +0530
 
 """Calculate precision, recall and mAP for queries."""
 
@@ -177,7 +177,7 @@ def main():
     parser.add_argument("-k", "--top_k", type=int, default=10,
                         help="Top k values to consider for computation.")
     parser.add_argument("-a", "--at_k", nargs="+", type=int,
-                        default=[5, 10, 15, 20, 25],
+                        default=[5, 10],
                         help=("k values at which to compute macro precision "
                               "and recall."))
     parser.add_argument("-c", "--case_charges_path", default=None,
@@ -236,7 +236,8 @@ def main():
               case_id, pred in scores.items()}
 
     # Top K
-    top_k = np.arange(start=1, stop=args.top_k + 1)
+    #  top_k = np.arange(start=1, stop=args.top_k + 1)
+    top_k = np.arange(start=1, stop=len(adv_index.keys()))
 
     # For storing the precision and recall scores across different thresholds
     precision_scores = []
