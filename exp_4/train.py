@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-# 
-# 
+# Birth: 2022-06-01 13:37:43.576184507 +0530
+# Modify: 2022-06-14 12:29:29.093807029 +0530
 
 """Training and evaluation for BertMultiLabel"""
 
@@ -54,6 +54,7 @@ def train_one_epoch(model, optimizer, loss_fn, data_loader, params,
             optimizer.step()
             optimizer.zero_grad()
             loss_batch.append(loss.item())
+
         outputs_batch = (y_pred.data.cpu().detach().numpy()
                          > params.threshold).astype(np.int32)
 
