@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-# Birth: 2022-05-17 09:38:52.711351951 +0530
-# Modify: 2022-05-17 16:31:13.567617509 +0530
+# Birth: 2022-06-01 13:37:43.576184507 +0530
+# Modify: 2022-05-17 16:44:31.067604700 +0530
 
 """BERT-based model for multi-label classification."""
 
@@ -24,7 +24,7 @@ class BertMultiLabel(nn.Module):
     """BERT-based model for multi-label classification"""
 
     def __init__(self, labels, device, hidden_size=768, max_length=512,
-                 bert_model_name="bert-base-uncased"):
+                 bert_model_name="bert-base-uncased", truncation_side="right"):
         super(BertMultiLabel, self).__init__()
         self.hidden_size = hidden_size
         self.device = device
@@ -33,10 +33,12 @@ class BertMultiLabel(nn.Module):
                        for label in labels]
         self.bert_model_name = bert_model_name
         self.bert_model = BertModel.from_pretrained(self.bert_model_name)
+        self.truncation_side = truncation_side
         # Keeping the tokenizer here makes the model better behaved
         # as opposed to using it in the DataLoader
         self.bert_tokenizer = BertTokenizer.from_pretrained(
-                                                    self.bert_model_name)
+                                        self.bert_model_name,
+                                        truncation_side=self.truncation_side)
 
         self.prediction = nn.ModuleDict({
             k: nn.Linear(in_features=self.hidden_size,
