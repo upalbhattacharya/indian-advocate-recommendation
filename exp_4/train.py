@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 # Birth: 2022-06-01 13:37:43.576184507 +0530
-# Modify: 2022-06-14 12:29:29.093807029 +0530
+# Modify: 2022-06-14 12:47:29.718800476 +0530
 
 """Training and evaluation for BertMultiLabel"""
 
@@ -266,7 +266,8 @@ def main():
                            device=args.device,
                            hidden_size=params.hidden_dim,
                            max_length=params.max_length,
-                           bert_model_name=args.bert_model_name)
+                           bert_model_name=args.bert_model_name,
+                           truncation_side=params.truncation_side)
 
     model.to(args.device)
 

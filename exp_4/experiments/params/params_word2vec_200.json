@@ -6,5 +6,6 @@
     "threshold": 0.5,
     "save_every": 1,
     "update_grad_every": 4,
-    "max_length": 512
+    "max_length": 512,
+    "truncation_side": "left"
 }
