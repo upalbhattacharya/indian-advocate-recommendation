@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
-# Birth: 2022-03-05 09:58:40.698068918 +0530
-# Modify: 2022-03-07 12:21:58.097904021 +0530
+# Birth: 2022-06-01 13:37:06.209339934 +0530
+# Modify: 2022-06-17 17:31:13.947393577 +0530
 
 import argparse
 import logging
@@ -90,8 +90,14 @@ def main():
                         help="Name of model.")
     parser.add_argument("-s", "--save_path", default="generated/", type=str,
                         help="Path to save generated embeddings.")
+    parser.add_argument("-ul", "--unique_labels", type=str,
+                        default=None, help="Labels to use as targets.")
 
     args = parser.parse_args()
+
+    # Creating save directory if it does not exist
+    if not os.path.exists(args.save_path):
+        os.makedirs(args.save_path)
 
     utils.set_logger(os.path.join(args.save_path, f"{args.name}.log"))
 
@@ -122,6 +128,7 @@ def main():
                             max_sent_len=params.max_sent_len,
                             max_sent_num=params.max_sent_num,
                             neg_ratio=params.neg_ratio,
+                            unique_labels=args.unique_labels,
                             give_ids=True)
 
     model = HANPrediction(input_size=params.input_size,
