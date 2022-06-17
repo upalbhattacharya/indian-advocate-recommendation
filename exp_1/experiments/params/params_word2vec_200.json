@@ -4,7 +4,7 @@
     "batch_size": 2,
     "input_size": 200,
     "hidden_dim": 100,
-    "threshold": 0.7,
+    "threshold": 0.5,
     "save_every": 10,
     "max_sent_len": 100,
     "max_sent_num": 100,
