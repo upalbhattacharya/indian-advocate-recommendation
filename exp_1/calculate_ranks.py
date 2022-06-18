@@ -1,8 +1,8 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 
-# Birth: 2022-03-07 11:30:37.004373029 +0530
-# Modify: 2022-03-07 17:17:18.319043000 +0530
+# Birth: 2022-06-01 13:37:06.173337265 +0530
+# Modify: 2022-03-21 12:06:13.878009100 +0530
 
 """Calculate ranked-based similarity of advocates and test cases."""
 
@@ -70,23 +70,32 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-q", "--query_path",
-                        help="Path to query embeddings.")
+                        help="Path to query embeddings")
     parser.add_argument("-d", "--database_path",
-                        help="Path to database embeddings.")
+                        help="Path to database embeddings")
     parser.add_argument("-ct", "--case_targets_path",
-                        help="Path to case targets.")
+                        help="Path to case targets(global, not fold-specific)")
+    parser.add_argument("-a", "---targest_dict",
+                        help="Dictionary of targets to consider.")
     parser.add_argument("-o", "--output_path",
-                        help="Path to save generated ranking.")
+                        help="Path to save generated ranking")
 
     args = parser.parse_args()
 
-    # Getting the case targets
+    # Getting the global case targets
     with open(args.case_targets_path, 'r') as f:
         case_targets = json.load(f)
 
-    # List of targets
+    # Getting targets to be considered
+    with open(args.adv_dict, 'r') as f:
+        targets_dict = json.load(f)
+
+    rel_targets = list(targets_dict.values())
+
+    # List of actual targets
     targets = list(set([value for values in case_targets.values()
-                        for value in values]))
+                        for value in values]).intersection(
+                            set(rel_targets)))
 
     # Relevant cases for targets
     targets_relevant = defaultdict(lambda: list())
