@@ -1,8 +1,8 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 
-# Birth: 2022-03-07 17:26:10.142410383 +0530
-# Modify: 2022-03-14 13:45:16.508410941 +0530
+# Birth: 2022-06-01 13:37:06.213340231 +0530
+# Modify: 2022-06-18 16:45:18.109241533 +0530
 
 """Calculate precision, recall and mAP for queries."""
 
@@ -78,9 +78,9 @@ def vectorize_prediction(scores, adv_index, k):
     """Takes a set of documents, the ranking of their retrieval items and
     a k value and vectorizes them."""
     vectorized_list = []
-    for case in list(scores.keys()):
+    for i, case in enumerate(list(scores.keys())):
         # Getting the top k elements
-        ranked_list = scores[case][:k]
+        ranked_list = scores[case][:int(k[i])]
         vector = np.zeros(shape=(len(adv_index.keys()),))
         for ranked_item in ranked_list:
             vector[adv_index[ranked_item]] = 1
@@ -106,8 +106,12 @@ def numpy_to_dict(array, cases, metric='P'):
     """Converts a numpy of precision or recall values into a dict"""
     numpy_dict = {}
     for i, case in enumerate(cases):
-        numpy_dict[case] = {f"{metric}@{j+1}": value for j,
-                            value in enumerate(array[i, :])}
+        if metric != 'RP':
+            numpy_dict[case] = {f"{metric}@{j+1}": value for j,
+                                value in enumerate(array[i, :])}
+        else:
+            numpy_dict[case] = {f"{metric}": array[i][0],
+                                "X": int(array[i][1])}
 
     return numpy_dict
 
@@ -135,31 +139,29 @@ def create_targets(targets_dict, adv_index, cases,
     lenient = []
     for case in cases:
         # mAP lenient
-        l = [0 for _ in range(len(adv_index.keys()))]
+        lenient_idx = [0 for _ in range(len(adv_index.keys()))]
         if all(ele is not None
                for ele in [case_charges, adv_charges, threshold]):
-            l = np.array([int(adv not in targets_dict[case] and
-                              len(set(adv_charges[adv]).intersection(
-                                  set(case_charges[case]))) * 1./len(
-                                      case_charges[case]) >= threshold)
-                          for adv in list(adv_index.keys())],
-                         dtype=np.float32)
+            lenient_idx = np.array([int(adv not in targets_dict[case] and
+                                    len(set(adv_charges[adv]).intersection(
+                                        set(case_charges[case]))) * 1./len(
+                                        case_charges[case]) >= threshold)
+                                    for adv in list(adv_index.keys())],
+                                   dtype=np.float32)
         # mAP hard
-        a = np.array([int(adv in targets_dict[case])
-                      for adv in list(adv_index.keys())],
-                     dtype=np.float32)
+        actual_idx = np.array([int(adv in targets_dict[case])
+                               for adv in list(adv_index.keys())],
+                              dtype=np.float32)
 
-        actual.append(a)
-        lenient.append(l)
+        actual.append(actual_idx)
+        lenient.append(lenient_idx)
 
     return np.stack(actual, axis=0), np.stack(lenient, axis=0)
 
-
-def at_k_values(prec: list[float], rec: list[float]) -> dict:
+def macro_values(score: list[float], metric: str) -> dict:
 
     values = {
-            "prec": sum(prec) * 1./len(prec),
-            "rec": sum(rec) * 1./len(rec)
+            f"{metric}": sum(score) * 1./len(score),
             }
     return values
 
@@ -171,10 +173,12 @@ def main():
                         help="Path to load scores from. Metrics go back here.")
     parser.add_argument("-t", "--case_targets_path",
                         help="Path to load the case targets from.")
+    parser.add_argument("-i", "--items_to_consider_dict",
+                        help="Dictionary of splits for items to consider")
     parser.add_argument("-k", "--top_k", type=int, default=10,
                         help="Top k values to consider for computation.")
     parser.add_argument("-a", "--at_k", nargs="+", type=int,
-                        default=[5, 10, 15, 20, 25],
+                        default=[5, 10],
                         help=("k values at which to compute macro precision "
                               "and recall."))
     parser.add_argument("-c", "--case_charges_path", default=None,
@@ -203,6 +207,20 @@ def main():
     with open(args.case_targets_path, 'r') as f:
         targets = json.load(f)
 
+    # Removing any items used for other tasks and not part of the end-task
+    print(f"There are {len(scores.keys())} originally.")
+
+    with open(args.items_to_consider_dict, 'r') as f:
+        items_dict = json.load(f)
+    relevant_items = list(set([item for subdict in items_dict.values()
+                               for items in subdict.values()
+                               for item in items]))
+
+    scores = {
+            k: v for k, v in scores.items()
+            if k in relevant_items}
+    print(f"After removing certain items, {len(scores.keys())} items remain.")
+
     # Load extra data for mAP lenient
     case_charges = None
     adv_charges = None
@@ -219,8 +237,9 @@ def main():
 
     # Creating the array to actual targets
     array_actual, array_lenient = create_targets(
-                                                targets, adv_index,
-                                                list(scores.keys()),
+                                                targets_dict=targets,
+                                                adv_index=adv_index,
+                                                cases=list(scores.keys()),
                                                 case_charges=case_charges,
                                                 adv_charges=adv_charges,
                                                 threshold=threshold)
@@ -244,7 +263,9 @@ def main():
     at_k = {}
 
     for k in top_k:
-        array_pred = vectorize_prediction(scores, adv_index, k)
+        # constant array
+        array_k = [k for _ in range(len(scores.keys()))]
+        array_pred = vectorize_prediction(scores, adv_index, array_k)
 
         # For each query
         prec, rec = per_query_prec_rec(array_actual_lenient,
@@ -253,7 +274,9 @@ def main():
         # For precision@k and recall@k
 
         if k in args.at_k:
-            at_k[int(k)] = at_k_values(prec, rec)
+            prec_macro = macro_values(prec, "prec")
+            rec_macro = macro_values(rec, "rec")
+            at_k[int(k)] = {**prec_macro, **rec_macro}
 
         precision_scores.append(prec)
         recall_scores.append(rec)
@@ -268,6 +291,13 @@ def main():
     # Shape = (num_queries, top_k)
     precision_scores = precision_scores.T
     recall_scores = recall_scores.T
+
+    # R-Precision calculation
+    array_k = np.sum(array_actual_lenient, axis=1)
+    array_pred = vectorize_prediction(scores, adv_index, array_k)
+    rprec_scores, _ = per_query_prec_rec(array_actual_lenient,
+                                         array_pred)
+    rprec_macro = macro_values(rprec_scores, "rprec")
 
     # Calculating the AP scores for each query
     for query, case_id in enumerate(list(scores.keys())):
@@ -288,7 +318,8 @@ def main():
     # Converting to a dictionary for human readability
     prec_dict = numpy_to_dict(precision_scores, list(scores.keys()), 'P')
     rec_dict = numpy_to_dict(recall_scores, list(scores.keys()), 'R')
-
+    rprec_dict = numpy_to_dict(np.column_stack((rprec_scores, array_k)),
+                               list(scores.keys()), 'RP')
     # Saving all the generated data
     with open(os.path.join(output_path, "per_query_precision.json"),
               'w+') as f:
@@ -298,6 +329,10 @@ def main():
               'w+') as f:
         json.dump(rec_dict, f, indent=4)
 
+    with open(os.path.join(output_path, "per_query_rprec.json"),
+              'w+') as f:
+        json.dump(rprec_dict, f, indent=4)
+
     with open(os.path.join(output_path, "per_query_ap.json"),
               'w+') as f:
         json.dump(ap_dict, f, indent=4)
@@ -305,6 +340,10 @@ def main():
     with open(os.path.join(output_path, "prec_rec_at_k.json"),
               'w+') as f:
         json.dump(at_k, f, indent=4)
+
+    with open(os.path.join(output_path, "macro_rprec.json"),
+              'w+') as f:
+        json.dump(rprec_macro, f, indent=4)
 
     with open(os.path.join(output_path, "mAP.txt"),
               'w+') as f:

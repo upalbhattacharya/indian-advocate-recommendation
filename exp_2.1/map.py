@@ -1,8 +1,8 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 
-# Birth: 2022-04-25 14:56:01.174268562 +0530
-# Modify: 2022-05-11 09:56:33.287866532 +0530
+# Birth: 2022-06-01 13:37:43.216156496 +0530
+# Modify: 2022-06-18 16:44:37.549155934 +0530
 
 """Calculate precision, recall and mAP for queries."""
 
@@ -139,25 +139,24 @@ def create_targets(targets_dict, adv_index, cases,
     lenient = []
     for case in cases:
         # mAP lenient
-        l = [0 for _ in range(len(adv_index.keys()))]
+        lenient_idx = [0 for _ in range(len(adv_index.keys()))]
         if all(ele is not None
                for ele in [case_charges, adv_charges, threshold]):
-            l = np.array([int(adv not in targets_dict[case] and
-                              len(set(adv_charges[adv]).intersection(
-                                  set(case_charges[case]))) * 1./len(
-                                      case_charges[case]) >= threshold)
-                          for adv in list(adv_index.keys())],
-                         dtype=np.float32)
+            lenient_idx = np.array([int(adv not in targets_dict[case] and
+                                    len(set(adv_charges[adv]).intersection(
+                                       set(case_charges[case]))) * 1./len(
+                                       case_charges[case]) >= threshold)
+                                    for adv in list(adv_index.keys())],
+                                   dtype=np.float32)
         # mAP hard
-        a = np.array([int(adv in targets_dict[case])
-                      for adv in list(adv_index.keys())],
-                     dtype=np.float32)
+        actual_idx = np.array([int(adv in targets_dict[case])
+                               for adv in list(adv_index.keys())],
+                              dtype=np.float32)
 
-        actual.append(a)
-        lenient.append(l)
+        actual.append(actual_idx)
+        lenient.append(lenient_idx)
 
     return np.stack(actual, axis=0), np.stack(lenient, axis=0)
-
 
 def macro_values(score: list[float], metric: str) -> dict:
 
@@ -222,8 +221,9 @@ def main():
 
     # Creating the array to actual targets
     array_actual, array_lenient = create_targets(
-                                                targets, adv_index,
-                                                list(scores.keys()),
+                                                targets_dict=targets,
+                                                adv_index=adv_index,
+                                                cases=list(scores.keys()),
                                                 case_charges=case_charges,
                                                 adv_charges=adv_charges,
                                                 threshold=threshold)

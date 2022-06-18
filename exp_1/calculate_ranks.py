@@ -2,7 +2,7 @@
 # -*- encoding: utf-8 -*-
 
 # Birth: 2022-06-01 13:37:06.173337265 +0530
-# Modify: 2022-03-21 12:06:13.878009100 +0530
+# Modify: 2022-06-18 10:56:54.093584029 +0530
 
 """Calculate ranked-based similarity of advocates and test cases."""
 
@@ -75,7 +75,7 @@ def main():
                         help="Path to database embeddings")
     parser.add_argument("-ct", "--case_targets_path",
                         help="Path to case targets(global, not fold-specific)")
-    parser.add_argument("-a", "---targest_dict",
+    parser.add_argument("-a", "---targets_dict",
                         help="Dictionary of targets to consider.")
     parser.add_argument("-o", "--output_path",
                         help="Path to save generated ranking")
@@ -87,19 +87,20 @@ def main():
         case_targets = json.load(f)
 
     # Getting targets to be considered
-    with open(args.adv_dict, 'r') as f:
+    with open(args.targets_dict, 'r') as f:
         targets_dict = json.load(f)
 
     rel_targets = list(targets_dict.values())
 
     # List of actual targets
-    targets = list(set([value for values in case_targets.values()
-                        for value in values]).intersection(
+    all_targets = list(set([value for values in case_targets.values()
+                       for value in values]).intersection(
                             set(rel_targets)))
 
     # Relevant cases for targets
     targets_relevant = defaultdict(lambda: list())
-    for case, targets in case_targets.items():
+    for case, case_targets in case_targets.items():
+        targets = list(set(all_targets).intersection(set(case_targets)))
         for target in targets:
             targets_relevant[target].append(case)
 
