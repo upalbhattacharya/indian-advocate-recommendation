@@ -2,7 +2,7 @@
 # -*- encoding: utf-8 -*-
 
 # Birth: 2022-06-01 13:37:06.213340231 +0530
-# Modify: 2022-06-18 16:45:18.109241533 +0530
+# Modify: 2022-06-18 16:49:53.159683125 +0530
 
 """Calculate precision, recall and mAP for queries."""
 
@@ -210,6 +210,7 @@ def main():
     # Removing any items used for other tasks and not part of the end-task
     print(f"There are {len(scores.keys())} originally.")
 
+    # TODO: must be a better way
     with open(args.items_to_consider_dict, 'r') as f:
         items_dict = json.load(f)
     relevant_items = list(set([item for subdict in items_dict.values()
