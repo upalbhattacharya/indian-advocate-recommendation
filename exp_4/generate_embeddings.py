@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 # Birth: 2022-06-19 10:24:50.449259094 +0530
-# Modify: 2022-06-19 10:45:03.266771731 +0530
+# Modify: 2022-06-19 12:51:17.641679477 +0530
 
 import argparse
 import logging
@@ -44,7 +44,7 @@ def generate_embeddings(model, data_loader, params, args):
         y_pred, embed = model(data)
 
         # Removing from computation graph
-        embed = embed.detach()
+        embed = embed.cpu().detach()
 
         # Saving the generated embeddings
         torch.save(embed, os.path.join(args.save_path, f"{doc}.pt"))

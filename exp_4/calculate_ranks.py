@@ -1,8 +1,8 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 
-# Birth: 2022-06-01 13:37:06.173337265 +0530
-# Modify: 2022-06-18 10:56:54.093584029 +0530
+# Birth: 2022-06-19 09:06:40.296382904 +0530
+# Modify: 2022-06-19 09:06:40.436376494 +0530
 
 """Calculate ranked-based similarity of advocates and test cases."""
 
@@ -49,8 +49,10 @@ def rerank(sim_dict: dict[float], targets_relevant: list[str]) -> dict[float]:
 def get_target_ranking(embed: torch.tensor,
                        db: dict[torch.tensor]) -> dict[float]:
 
+    db_stack = torch.squeeze(torch.stack((list(db.values())), dim=0))
+
     similarity = cdist(embed.view(1, -1),
-                       torch.stack((list(db.values())), dim=0),
+                       db_stack,
                        metric=cosine)
 
     similarity = np.squeeze(similarity)
