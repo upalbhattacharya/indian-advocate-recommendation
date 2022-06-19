@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-# Birth: 2022-05-17 17:02:01.350921438 +0530
-# Modify: 2022-05-19 11:16:46.460784863 +0530
+# Birth: 2022-06-01 13:37:43.576184507 +0530
+# Modify: 2022-06-19 09:33:25.067001700 +0530
 
 """Utilities for BertMultiLabel"""
 
@@ -55,7 +55,7 @@ class Accumulate:
                 np.stack(self.targets_batch, axis=0))
 
 
-def load_checkpoint(restore_path, model, optimizer, device_id=None):
+def load_checkpoint(restore_path, model, optimizer=None, device_id=None):
     if not(os.path.exists(restore_path)):
         raise (f"No restore file found at {restore_path}.")
 

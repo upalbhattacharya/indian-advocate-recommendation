@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-# Birth: 2022-05-17 12:33:03.331180972 +0530
-# Modify: 2022-05-17 16:32:49.707615965 +0530
+# Birth: 2022-06-19 10:27:51.292441221 +0530
+# Modify: 2022-06-19 10:15:49.040289676 +0530
 
 """Data loader for BertMultiLabel"""
 
@@ -19,7 +19,8 @@ __email__ = "upal.bhattacharya@gmail.com"
 
 
 class BertMultiLabelDataset(Dataset):
-    def __init__(self, data_paths, targets_paths, unique_labels=None):
+    def __init__(self, data_paths, targets_paths, unique_labels=None,
+                 mode="train"):
         self.data_paths = data_paths
         self.targets_paths = targets_paths
         if unique_labels is None:
@@ -35,6 +36,7 @@ class BertMultiLabelDataset(Dataset):
         self.idx = {i: k for i, k in enumerate(self.text_paths)}
 
         self.targets_dict = self.get_targets()
+        self.mode = mode
 
     def __len__(self):
         return len(self.text_paths.keys())
@@ -43,7 +45,11 @@ class BertMultiLabelDataset(Dataset):
         data = self.load_data(self.text_paths[self.idx[idx]])
         target = self.fetch_target(self.idx[idx])
 
-        return data, target
+        if self.mode == "train":
+            return data, target
+        else:
+            flname = os.path.splitext(os.path.basename(self.idx[idx]))[0]
+            return flname, data
 
     def get_fullpaths(self):
 
