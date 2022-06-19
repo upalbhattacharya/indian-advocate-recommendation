@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 # Birth: 2022-06-19 10:24:50.449259094 +0530
-# Modify: 2022-06-19 10:25:54.152848046 +0530
+# Modify: 2022-06-19 10:26:26.840691872 +0530
 
 import argparse
 import logging
@@ -37,7 +37,8 @@ def generate_embeddings(model, data_loader, params, args):
     # For getting the embeddings
 
     # Generating embeddings
-    for idx, (doc, data) in enumerate(iter(data_loader)):
+    for idx in range(len(data_loader)):
+        doc, data = data_loader[idx]
         logging.info(f"Generating embeddings for {doc}.")
 
         y_pred, embed = model(data)
