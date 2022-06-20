@@ -2,7 +2,7 @@
 # -*- encoding: utf-8 -*-
 
 # Birth: 2022-06-01 13:37:06.213340231 +0530
-# Modify: 2022-06-18 16:49:53.159683125 +0530
+# Modify: 2022-06-18 16:55:35.118116075 +0530
 
 """Calculate precision, recall and mAP for queries."""
 
@@ -158,6 +158,7 @@ def create_targets(targets_dict, adv_index, cases,
 
     return np.stack(actual, axis=0), np.stack(lenient, axis=0)
 
+
 def macro_values(score: list[float], metric: str) -> dict:
 
     values = {
@@ -253,7 +254,7 @@ def main():
               case_id, pred in scores.items()}
 
     # Top K
-    top_k = np.arange(start=1, stop=args.top_k + 1)
+    top_k = np.arange(start=1, stop=len(adv_index.keys()))
 
     # For storing the precision and recall scores across different thresholds
     precision_scores = []
