@@ -2,7 +2,7 @@
 # -*- encoding: utf-8 -*-
 
 # Birth: 2022-06-19 09:06:15.454598084 +0530
-# Modify: 2022-06-19 09:06:15.474595331 +0530
+# Modify: 2022-06-20 21:35:22.015512957 +0530
 
 """Calculate precision, recall and mAP for queries."""
 
@@ -157,6 +157,7 @@ def create_targets(targets_dict, adv_index, cases,
         lenient.append(lenient_idx)
 
     return np.stack(actual, axis=0), np.stack(lenient, axis=0)
+
 
 def macro_values(score: list[float], metric: str) -> dict:
 
