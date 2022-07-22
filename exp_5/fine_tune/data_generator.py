@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 # Birth: 2022-07-21 16:48:02.702290180 +0530
-# Modify: 2022-07-22 00:09:20.168224143 +0530
+# Modify: 2022-07-22 18:30:22.928337292 +0530
 
 """Data loaders for SBERT"""
 
 import json
 import os
-from itertools import combinations
+from itertools import combinations, groupby
+import numpy as np
+from random import sample, shuffle
 
 import torch
 from torch.utils.data import Dataset
@@ -116,10 +118,20 @@ class EmbeddingGenerationDataset(Dataset):
 
 class SBertTrainerDataset(Dataset):
     def __init__(self, data_paths, targets_paths, unique_labels=None,
-                 mode="train", similarity="jaccard"):
+                 similarity="jaccard", sample="equal",
+                 steps=10, min_sim=0.0, max_sim=1.0):
+
         self.data_paths = data_paths
         self.targets_paths = targets_paths
+        self.similarity = similarity
+        self.sample = sample
+        self.steps = steps
+        self.min_sim = min_sim
+        self.max_sim = max_sim
+
         self.targets_dict = self.get_targets()
+        self.text_paths = self.get_fullpaths()
+
         if unique_labels is None:
             self.unique_labels = self.get_unique_labels()
         else:
@@ -128,14 +140,17 @@ class SBertTrainerDataset(Dataset):
             self.unique_labels = list(filter(None, map(lambda x: x.strip("\n"),
                                                        self.unique_labels)))
 
-        self.text_paths = self.get_fullpaths()
+        if self.similarity == "jaccard":
+            self.sim_func = self.jaccard
+
         self.all_combinations = [(idx_1, idx_2)
                                  for idx_1, idx_2 in combinations(
                                             range(len(self.text_paths)), 2)]
-        # IDs needed for __getitem__
         self.idx = {i: k for i, k in enumerate(self.text_paths)}
-        self.mode = mode
-        self.similarity = similarity
+        self.sim_scores = self.pair_sim_scores()
+
+        if self.sample == "equal":
+            self.sim_scores, self.all_combinations = self.equal_sample()
 
     def __len__(self):
         return len(self.all_combinations)
@@ -144,14 +159,9 @@ class SBertTrainerDataset(Dataset):
         idx_1, idx_2 = self.all_combinations[idx]
         doc_1 = self.load_data(self.text_paths[self.idx[idx_1]])
         doc_2 = self.load_data(self.text_paths[self.idx[idx_2]])
-        target_1 = self.fetch_target(self.idx[idx_1])
-        target_2 = self.fetch_target(self.idx[idx_2])
+        sim = self.sim_scores[idx]
 
-        if self.similarity == "jaccard":
-            sim = self.jaccard(target_1, target_2)
-
-        if self.mode == "train":
-            return doc_1, doc_2, sim
+        return doc_1, doc_2, sim
 
     def get_fullpaths(self):
 
@@ -215,6 +225,33 @@ class SBertTrainerDataset(Dataset):
         return unique_labels
 
     def jaccard(self, it_a, it_b):
-
         return (len(set(it_a).intersection(set(it_b))) *
                 1./len(set(it_a).union(set(it_b))))
+
+    def pair_sim_scores(self):
+        sim_scores = []
+        for i, (idx_1, idx_2) in enumerate(self.all_combinations):
+            target_1 = self.fetch_target(self.idx[idx_1])
+            target_2 = self.fetch_target(self.idx[idx_2])
+            sim_scores.append(self.sim_func(target_1, target_2))
+        return sim_scores
+
+    def equal_sample(self):
+        bins = np.arange(self.min_sim, self.max_sim,
+                         (self.max_sim - self.min_sim) * 1./self.steps)
+        bin_idxs = np.digitize(self.sim_scores, bins=bins)
+        bin_groups = {
+                key: [item[0] for item in group]
+                for key, group in groupby(sorted(enumerate(bin_idxs),
+                                          key=lambda x: x[1]), lambda x: x[1])
+                 }
+
+        least = min(list(map(lambda x: len(bin_groups[x]), bin_groups)))
+        selected = []
+        for k, v in bin_groups.items():
+            selected.extend(sample(v, least))
+
+        shuffle(selected)
+        sim_scores = [self.sim_scores[idx] for idx in selected]
+        all_combinations = [self.all_combinations[idx] for idx in selected]
+        return sim_scores, all_combinations
