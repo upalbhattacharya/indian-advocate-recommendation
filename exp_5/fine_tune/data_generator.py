@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 # Birth: 2022-07-21 16:48:02.702290180 +0530
-# Modify: 2022-07-22 18:30:22.928337292 +0530
+# Modify: 2022-07-22 18:32:30.372731442 +0530
 
 """Data loaders for SBERT"""
 
@@ -117,10 +117,36 @@ class EmbeddingGenerationDataset(Dataset):
 
 
 class SBertTrainerDataset(Dataset):
+    """Dataset generator for SBERT. Creates sample pairs following a sampling
+    strategy"""
+
     def __init__(self, data_paths, targets_paths, unique_labels=None,
                  similarity="jaccard", sample="equal",
                  steps=10, min_sim=0.0, max_sim=1.0):
 
+        """
+        Initialization
+
+        Parameters
+        ----------
+        data_paths: list
+            Paths to load data from
+        target_paths: list
+            Paths to load targets from
+        unique_labels: list, default None
+            List of unique labels to consider as relevant targets
+        similarity: str, default "jaccard"
+            Similarity metric to use
+        sample: str, default "equal"
+            Sampling strategy
+        steps: int, default 10
+            Number of bins to create when sampling
+        min_sim: float, default 0.0
+            Minimum similarity value, used for creating bins. Ignored when 
+            sampling is not specified.
+        max_sim: float, default 1.0
+            Maximum similarity value
+        """
         self.data_paths = data_paths
         self.targets_paths = targets_paths
         self.similarity = similarity
@@ -143,10 +169,12 @@ class SBertTrainerDataset(Dataset):
         if self.similarity == "jaccard":
             self.sim_func = self.jaccard
 
+        # Getting all pairs
         self.all_combinations = [(idx_1, idx_2)
                                  for idx_1, idx_2 in combinations(
                                             range(len(self.text_paths)), 2)]
         self.idx = {i: k for i, k in enumerate(self.text_paths)}
+        # Computing similarity scores (used for sampling)
         self.sim_scores = self.pair_sim_scores()
 
         if self.sample == "equal":
