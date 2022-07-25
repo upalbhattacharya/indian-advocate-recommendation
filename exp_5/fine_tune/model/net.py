@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 # Birth: 2022-07-21 16:48:02.886297359 +0530
-# Modify: 2022-07-21 19:44:03.709002814 +0530
+# Modify: 2022-07-21 20:05:48.160205893 +0530
 
 """SBERT model for embedding generation."""
 
@@ -22,7 +22,7 @@ class SBertEmbedding(nn.Module):
     """SBERT model for embedding generation"""
 
     def __init__(self, device, hidden_size=768, max_length=512,
-                 sbert_model_name="sentence-transformers/",
+                 sbert_model_name="sentence-transformers/all-distilroberta-v1",
                  truncation_side="right", mode="train", pooling="mean"):
         super(SBertEmbedding, self).__init__()
         self.hidden_size = hidden_size

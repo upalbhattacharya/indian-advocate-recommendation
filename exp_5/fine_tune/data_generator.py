@@ -1,18 +1,20 @@
-#!/usr/bin/env python
+#!/usr/bin/env pythot
 # -*- encoding: utf-8 -*-
 # Birth: 2022-07-21 16:48:02.702290180 +0530
-# Modify: 2022-07-22 18:32:30.372731442 +0530
+# Modify: 2022-07-25 13:05:35.545682643 +0530
 
 """Data loaders for SBERT"""
 
 import json
+import logging
 import os
 from itertools import combinations, groupby
-import numpy as np
 from random import sample, shuffle
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 __author__ = "Upal Bhattacharya"
 __license__ = ""
@@ -121,9 +123,8 @@ class SBertTrainerDataset(Dataset):
     strategy"""
 
     def __init__(self, data_paths, targets_paths, unique_labels=None,
-                 similarity="jaccard", sample="equal",
+                 similarity="jaccard", sample="equal", least=5000,
                  steps=10, min_sim=0.0, max_sim=1.0):
-
         """
         Initialization
 
@@ -139,10 +140,12 @@ class SBertTrainerDataset(Dataset):
             Similarity metric to use
         sample: str, default "equal"
             Sampling strategy
+        least: int, default 5000
+            Least number of elements in a bin to be considered for binning
         steps: int, default 10
             Number of bins to create when sampling
         min_sim: float, default 0.0
-            Minimum similarity value, used for creating bins. Ignored when 
+            Minimum similarity value, used for creating bins. Ignored whe
             sampling is not specified.
         max_sim: float, default 1.0
             Maximum similarity value
@@ -151,6 +154,7 @@ class SBertTrainerDataset(Dataset):
         self.targets_paths = targets_paths
         self.similarity = similarity
         self.sample = sample
+        self.least = least
         self.steps = steps
         self.min_sim = min_sim
         self.max_sim = max_sim
@@ -170,14 +174,21 @@ class SBertTrainerDataset(Dataset):
             self.sim_func = self.jaccard
 
         # Getting all pairs
+        logging.info("[DATASET] Generating all combinations")
+        #  self.all_combinations = [(idx_1, idx_2)
+                                 #  for idx_1, idx_2 in combinations(
+                                            #  range(len(self.text_paths)), 2)]
+
         self.all_combinations = [(idx_1, idx_2)
                                  for idx_1, idx_2 in combinations(
-                                            range(len(self.text_paths)), 2)]
+                                            range(100), 2)]
         self.idx = {i: k for i, k in enumerate(self.text_paths)}
         # Computing similarity scores (used for sampling)
         self.sim_scores = self.pair_sim_scores()
 
         if self.sample == "equal":
+
+            logging.info(f"[DATASET] Retaining pairs by {self.sample} sampling")
             self.sim_scores, self.all_combinations = self.equal_sample()
 
     def __len__(self):
@@ -188,14 +199,15 @@ class SBertTrainerDataset(Dataset):
         doc_1 = self.load_data(self.text_paths[self.idx[idx_1]])
         doc_2 = self.load_data(self.text_paths[self.idx[idx_2]])
         sim = self.sim_scores[idx]
-
         return doc_1, doc_2, sim
 
     def get_fullpaths(self):
 
         doc_paths = {}
+        logging.info("[DATASET] Getting all file paths")
         for path in self.data_paths:
-            for doc_idx in os.listdir(path):
+            logging.info(f"[DATASET] Loading file paths from {path}")
+            for doc_idx in tqdm(os.listdir(path)):
                 idx = os.path.splitext(doc_idx)[0]
                 doc_paths[idx] = os.path.join(path, doc_idx)
 
@@ -253,8 +265,10 @@ class SBertTrainerDataset(Dataset):
         return unique_labels
 
     def jaccard(self, it_a, it_b):
-        return (len(set(it_a).intersection(set(it_b))) *
-                1./len(set(it_a).union(set(it_b))))
+        # Forcing float32 to prevent double conversion
+        return torch.tensor([[len(set(it_a).intersection(set(it_b))) *
+                            1./len(set(it_a).union(set(it_b)))]],
+                            dtype=torch.float32)
 
     def pair_sim_scores(self):
         sim_scores = []
@@ -268,18 +282,25 @@ class SBertTrainerDataset(Dataset):
         bins = np.arange(self.min_sim, self.max_sim,
                          (self.max_sim - self.min_sim) * 1./self.steps)
         bin_idxs = np.digitize(self.sim_scores, bins=bins)
+        logging.info("[DATASET] Creating bins for sampling")
         bin_groups = {
                 key: [item[0] for item in group]
-                for key, group in groupby(sorted(enumerate(bin_idxs),
-                                          key=lambda x: x[1]), lambda x: x[1])
+                for key, group in tqdm(groupby(sorted(enumerate(bin_idxs),
+                                       key=lambda x: x[1]), lambda x: x[1]))
                  }
-
-        least = min(list(map(lambda x: len(bin_groups[x]), bin_groups)))
+        sizes = list(map(lambda x: len(bin_groups[x]), bin_groups))
+        logging.info(f"[DATASET] bins sizes are {sizes}")
+        least = max(min(sizes), self.least)
         selected = []
         for k, v in bin_groups.items():
-            selected.extend(sample(v, least))
+            selected.extend(sample(v, min(len(v), least)))
 
         shuffle(selected)
+        sim_scores = []
+        all_combinations = []
+        #  for idx in selected:
+            #  sim_scores.append[self.sim_scores[idx]]
+            #  all_combinations.append[self.all_combinations[idx]]
         sim_scores = [self.sim_scores[idx] for idx in selected]
         all_combinations = [self.all_combinations[idx] for idx in selected]
         return sim_scores, all_combinations

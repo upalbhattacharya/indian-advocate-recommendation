@@ -1,10 +1,10 @@
 {
-    "num_epochs": 15,
+    "num_epochs": 1,
     "lr": 3e-5,
-    "batch_size": 8,
-    "threshold": 0.5,
+    "batch_size": 2,
     "save_every": 1,
-    "update_grad_every": 4,
+    "update_grad_every": 16,
     "max_length": 512,
-    "truncation_side": "left"
+    "truncation_side": "right",
+    "least": 5000
 }
