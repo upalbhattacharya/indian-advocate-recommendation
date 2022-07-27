@@ -17,7 +17,7 @@ FOLDS=4
     # --threshold 1.0
 for fold in $(seq 0 $FOLDS)
 do
-    ./ndcg.py --targets /home/workboots/Datasets/DHC/common/case_advs_new.json \
+    ./ndcg.py --targets /home/workboots/Datasets/DHC/common/case_winners.json \
         --charge_targets /home/workboots/Datasets/DHC/variations/var_3/targets/unique_labels.txt \
         --charge_adv_win_ratios /home/workboots/Datasets/DHC/variations/var_3/targets/charge_adv_win_ratios_new.json \
         --case_charges /home/workboots/Datasets/DHC/variations/var_3/targets/ipc_case_offences.json \
@@ -25,8 +25,8 @@ do
         --advocate_charges /home/workboots/Datasets/DHC/variations/var_3/targets/adv_ipc_charges_new.json \
         --relevant_advocates /home/workboots/Datasets/DHC/common/selected_advs.json \
         --strategy 'equal' \
-        --scores /home/workboots/Results/advocate_recommendation/exp_5/fine_tune/metrics/sbert_distilroberta_fold_$fold/similarity_reranking.json \
-        --output_path /home/workboots/Results/advocate_recommendation/exp_5/fine_tune/metrics/sbert_distilroberta_fold_$fold/ndcg_hard/ \
+        --scores /home/workboots/Results/advocate_recommendation/exp_5/no_fine_tune/metrics/sbert_distilroberta_fold_$fold/similarity_reranking.json \
+        --output_path /home/workboots/Results/advocate_recommendation/exp_5/no_fine_tune/metrics/sbert_distilroberta_fold_$fold/ndcg_harder/ \
         # --threshold 1.0
 done
 

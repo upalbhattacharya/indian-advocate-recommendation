@@ -1,8 +1,8 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 
-# Birth: 2022-04-25 14:56:01.174268562 +0530
-# Modify: 2022-05-11 09:56:33.287866532 +0530
+# Birth: 2022-06-01 13:37:43.320164588 +0530
+# Modify: 2022-07-27 20:53:19.494892602 +0530
 
 """Calculate precision, recall and mAP for queries."""
 
@@ -42,8 +42,8 @@ def per_query_prec_rec(y_true, y_pred):
         pp = np.sum(y_pred[query, :])
         p = np.sum(y_true[query, :])
 
-        prec = tp * 1./pp
-        rec = tp * 1./p
+        prec = tp * 1./pp if pp != 0 else 0.0
+        rec = tp * 1./p if p != 0 else 0.0
 
         per_query_prec.append(prec)
         per_query_rec.append(rec)
@@ -54,8 +54,11 @@ def per_query_prec_rec(y_true, y_pred):
 def one_query_ap(precisions, y_true, relevance):
     """Computes the average precision of one query given the precision and
     relevance values."""
-    return np.dot(
-        precisions, relevance[:len(precisions)]) * 1./(np.sum(y_true))
+    sum = np.sum(y_true)
+    if sum != 0:
+        return np.dot(precisions, relevance[:len(precisions)]) * 1./sum
+    else:
+        return 0.0
 
 
 def mAP(ap_values):
@@ -139,22 +142,22 @@ def create_targets(targets_dict, adv_index, cases,
     lenient = []
     for case in cases:
         # mAP lenient
-        l = [0 for _ in range(len(adv_index.keys()))]
+        lenient_idx = [0 for _ in range(len(adv_index.keys()))]
         if all(ele is not None
                for ele in [case_charges, adv_charges, threshold]):
-            l = np.array([int(adv not in targets_dict[case] and
-                              len(set(adv_charges[adv]).intersection(
-                                  set(case_charges[case]))) * 1./len(
-                                      case_charges[case]) >= threshold)
-                          for adv in list(adv_index.keys())],
-                         dtype=np.float32)
+            lenient_idx = np.array([int(adv not in targets_dict[case] and
+                                    len(set(adv_charges[adv]).intersection(
+                                        set(case_charges[case]))) * 1./len(
+                                        case_charges[case]) >= threshold)
+                                    for adv in list(adv_index.keys())],
+                                   dtype=np.float32)
         # mAP hard
-        a = np.array([int(adv in targets_dict[case])
-                      for adv in list(adv_index.keys())],
-                     dtype=np.float32)
+        actual_idx = np.array([int(adv in targets_dict[case])
+                               for adv in list(adv_index.keys())],
+                              dtype=np.float32)
 
-        actual.append(a)
-        lenient.append(l)
+        actual.append(actual_idx)
+        lenient.append(lenient_idx)
 
     return np.stack(actual, axis=0), np.stack(lenient, axis=0)
 
@@ -174,6 +177,8 @@ def main():
                         help="Path to load scores from. Metrics go back here.")
     parser.add_argument("-t", "--case_targets_path",
                         help="Path to load the case targets from.")
+    parser.add_argument("-i", "--items_to_consider_dict",
+                        help="Dictionary of splits for items to consider")
     parser.add_argument("-k", "--top_k", type=int, default=10,
                         help="Top k values to consider for computation.")
     parser.add_argument("-a", "--at_k", nargs="+", type=int,
@@ -206,6 +211,21 @@ def main():
     with open(args.case_targets_path, 'r') as f:
         targets = json.load(f)
 
+    # Removing any items used for other tasks and not part of the end-task
+    print(f"There are {len(scores.keys())} originally.")
+
+    # TODO: must be a better way
+    with open(args.items_to_consider_dict, 'r') as f:
+        items_dict = json.load(f)
+    relevant_items = list(set([item for subdict in items_dict.values()
+                               for items in subdict.values()
+                               for item in items]))
+
+    scores = {
+            k: v for k, v in scores.items()
+            if k in relevant_items}
+    print(f"After removing certain items, {len(scores.keys())} items remain.")
+
     # Load extra data for mAP lenient
     case_charges = None
     adv_charges = None
@@ -222,8 +242,9 @@ def main():
 
     # Creating the array to actual targets
     array_actual, array_lenient = create_targets(
-                                                targets, adv_index,
-                                                list(scores.keys()),
+                                                targets_dict=targets,
+                                                adv_index=adv_index,
+                                                cases=list(scores.keys()),
                                                 case_charges=case_charges,
                                                 adv_charges=adv_charges,
                                                 threshold=threshold)
@@ -236,7 +257,6 @@ def main():
               case_id, pred in scores.items()}
 
     # Top K
-    #  top_k = np.arange(start=1, stop=args.top_k + 1)
     top_k = np.arange(start=1, stop=len(adv_index.keys()))
 
     # For storing the precision and recall scores across different thresholds
@@ -248,7 +268,7 @@ def main():
     at_k = {}
 
     for k in top_k:
-        # Constant array
+        # constant array
         array_k = [k for _ in range(len(scores.keys()))]
         array_pred = vectorize_prediction(scores, adv_index, array_k)
 
@@ -305,7 +325,6 @@ def main():
     rec_dict = numpy_to_dict(recall_scores, list(scores.keys()), 'R')
     rprec_dict = numpy_to_dict(np.column_stack((rprec_scores, array_k)),
                                list(scores.keys()), 'RP')
-
     # Saving all the generated data
     with open(os.path.join(output_path, "per_query_precision.json"),
               'w+') as f:
@@ -323,7 +342,7 @@ def main():
               'w+') as f:
         json.dump(ap_dict, f, indent=4)
 
-    with open(os.path.join(output_path, "macro_prec_rec_at_k.json"),
+    with open(os.path.join(output_path, "prec_rec_at_k.json"),
               'w+') as f:
         json.dump(at_k, f, indent=4)
 
