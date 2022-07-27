@@ -1,8 +1,8 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 
-# Birth: 2022-06-19 09:06:15.454598084 +0530
-# Modify: 2022-06-20 21:35:22.015512957 +0530
+# Birth: 2022-07-21 16:48:02.882297203 +0530
+# Modify: 2022-07-26 10:53:24.317977099 +0530
 
 """Calculate precision, recall and mAP for queries."""
 
@@ -11,6 +11,8 @@ import json
 import os
 
 import numpy as np
+
+np.seterr('raise')
 
 __author__ = "Upal Bhattacharya"
 __license__ = ""
@@ -42,8 +44,8 @@ def per_query_prec_rec(y_true, y_pred):
         pp = np.sum(y_pred[query, :])
         p = np.sum(y_true[query, :])
 
-        prec = tp * 1./pp
-        rec = tp * 1./p
+        prec = tp * 1./pp if pp != 0 else 0
+        rec = tp * 1./p if p != 0 else 0
 
         per_query_prec.append(prec)
         per_query_rec.append(rec)
@@ -54,8 +56,12 @@ def per_query_prec_rec(y_true, y_pred):
 def one_query_ap(precisions, y_true, relevance):
     """Computes the average precision of one query given the precision and
     relevance values."""
-    return np.dot(
-        precisions, relevance[:len(precisions)]) * 1./(np.sum(y_true))
+    dot = np.dot(precisions, relevance[:len(precisions)])
+    sum = np.sum(y_true)
+    if sum != 0:
+        return dot * 1./(np.sum(y_true))
+    else:
+        return 0.0
 
 
 def mAP(ap_values):

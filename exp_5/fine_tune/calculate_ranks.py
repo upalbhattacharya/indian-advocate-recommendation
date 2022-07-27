@@ -1,8 +1,8 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 
-# Birth: 2022-06-19 09:06:40.296382904 +0530
-# Modify: 2022-06-19 09:06:40.436376494 +0530
+# Birth: 2022-07-21 16:48:01.834256300 +0530
+# Modify: 2022-07-21 16:48:02.662288619 +0530
 
 """Calculate ranked-based similarity of advocates and test cases."""
 
@@ -91,6 +91,9 @@ def main():
     # Getting targets to be considered
     with open(args.targets_dict, 'r') as f:
         targets_dict = json.load(f)
+
+    if not(os.path.exists(args.output_path)):
+        os.makedirs(args.output_path)
 
     rel_targets = list(targets_dict.values())
 

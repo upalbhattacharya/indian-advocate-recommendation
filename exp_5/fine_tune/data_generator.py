@@ -1,7 +1,7 @@
 #!/usr/bin/env pythot
 # -*- encoding: utf-8 -*-
 # Birth: 2022-07-21 16:48:02.702290180 +0530
-# Modify: 2022-07-25 13:05:35.545682643 +0530
+# Modify: 2022-07-25 16:07:35.933651093 +0530
 
 """Data loaders for SBERT"""
 
@@ -181,7 +181,7 @@ class SBertTrainerDataset(Dataset):
 
         self.all_combinations = [(idx_1, idx_2)
                                  for idx_1, idx_2 in combinations(
-                                            range(100), 2)]
+                                            range(10), 2)]
         self.idx = {i: k for i, k in enumerate(self.text_paths)}
         # Computing similarity scores (used for sampling)
         self.sim_scores = self.pair_sim_scores()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 # Birth: 2022-06-01 13:37:43.576184507 +0530
-# Modify: 2022-06-19 09:33:25.067001700 +0530
+# Modify: 2022-06-19 09:35:40.222532267 +0530
 
 """Utilities for BertMultiLabel"""
 
@@ -92,9 +92,10 @@ def save_checkpoint(state, is_best, save_path, to_save=False):
         torch.save(state, os.path.join(save_path,
                                        f"epoch_{state['epoch']}.pth.tar"))
 
+
 def set_logger(log_path: str):
 
-    logger=logging.getLogger()
+    logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
 
     if not logger.handlers:

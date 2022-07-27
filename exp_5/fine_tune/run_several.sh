@@ -9,11 +9,10 @@ FOLDS=4
 
 for fold in $(seq 0 $FOLDS)
 do
-    python train.py -d
-    ~/Datasets/DHC/variations/var_3/data/ipc_data/cross_val/5_fold/fold_$fold/ \
+    python train.py -d ~/Datasets/DHC/variations/var_3/data/ipc_data/cross_val/5_fold/fold_$fold/ \
         -t ~/Datasets/DHC/variations/var_3/targets/ipc_case_offences.json \
         -n SBERT_distilroberta_fold_$fold -p params_distilroberta.json \
-        -ul ~/Datasets/DHC/variations/var_3/targets/unique_labels.txt \
+        -ul ~/Datasets/DHC/variations/var_3/targets/unique_labels.txt 
 done
 
 

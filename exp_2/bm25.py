@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf8 -*-
-# Birth: 2022-05-04 11:09:19.731606505 +0530
-# Modify: 2022-05-04 11:29:48.424972225 +0530
+# Birth: 2022-06-01 13:37:43.216156496 +0530
+# Modify: 2022-07-26 21:14:19.336633380 +0530
 
 """
 Script that trains a bm25 model on the train dataset case files.
@@ -11,16 +11,20 @@ high_count_advs dictionary and trains the bm25 model on it.
 
 import argparse
 import json
+import logging
 import math
 import os
 import re
 import string
+import time
 from string import punctuation
 
 import numpy as np
 from gensim import corpora
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+
+from utils import set_logger
 
 __author__ = "Upal Bhattacharya"
 __license__ = ""
@@ -33,7 +37,7 @@ stopwords = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
 
-def add_docs(doc_id_list, data_path):
+def create_concat_text(doc_id_list, data_path):
     """Load documents and return concatenated document.
 
     Parameters
@@ -56,9 +60,13 @@ def add_docs(doc_id_list, data_path):
         flname = doc_id
         if (os.path.exists(os.path.join(data_path, f"{flname}.txt"))):
             with open(os.path.join(data_path, f"{flname}.txt"), 'r') as f:
+                #  docs[flname] = f.read().split()
                 docs[flname] = process(f.read())
 
-    return docs
+    # Concatenating into one document
+    doc_concat = [token for doc in docs.values() for token in doc]
+
+    return doc_concat, docs
 
 
 def process(text):
@@ -91,7 +99,7 @@ def idf(corpus_size, doc_freq):
         IDF score of the given token.
     """
 
-    return math.log((corpus_size - doc_freq + 0.5)/(doc_freq + 0.5) + 1)
+    return math.log((corpus_size - doc_freq + 0.5)/(doc_freq + 0.5))
 
 
 def convert_to_token_dict(corpus_dict, idx_dict):
@@ -257,13 +265,16 @@ def main():
                         help="Path to save generated BM25 scores.")
     args = parser.parse_args()
 
+    timestr = time.strftime("%Y%m%d%H%M%S")
+    set_logger(os.path.join(args.output_path, f"bm25_{timestr}.log"))
+
     # Loading dictionary containing the 'train', 'test' and 'val' splits
 
     # of the high count advocates
     with open(args.dict_path, 'r') as f:
         high_count_advs = json.load(f)
 
-    train_texts = {}  # For storing the concatenated advocate texts
+    adv_concat = {}  # For storing the concatenated advocate texts
     test_doc_ids = set()  # For storing the IDs of the test documents
     train_texts = {}  # For storing the training documents
     test_texts = {}  # For storing the test documents
@@ -274,24 +285,26 @@ def main():
 
     # Creating the concatenated advocate representations to pass to the BM25
     # model
-    for _, cases in high_count_advs.items():
+    for adv, cases in high_count_advs.items():
+
+        logging.info(f"Creating meta-document for {adv}")
 
         # Creating the training corpus
-        docs = add_docs(cases["db"], args.file_path)
-        train_texts = {**train_texts, **docs}
-        docs = add_docs(cases["train"], args.file_path)
+        adv_concat[adv], docs = create_concat_text([*cases["db"],
+                                                    *cases["train"]],
+                                                   args.file_path)
         train_texts = {**train_texts, **docs}
 
-        # Getting the list of test cases after removing prefixes
-        test_doc_ids.update(map(lambda x: x, cases["test"]))
-        test_doc_ids.update(map(lambda x: x, cases["val"]))
+        test_doc_ids.update(cases["test"])
+        test_doc_ids.update(cases["val"])
         #  test_doc_ids.update(map(lambda x: x, cases["train"]))
 
     # Getting number of documents in the corpus_freqs
-    corpus_size = len([*train_texts])
+    corpus_size = len([*adv_concat])
 
     # Creating a dictionary for the dfs and cfs
-    dictionary = corpora.Dictionary(train_texts.values())
+    logging.info("Creating dictionary for dfs and cfs")
+    dictionary = corpora.Dictionary(adv_concat.values())
 
     # Getting all the frequencies needed for calculating the BM25 scores
     # Conversion from idx:value to token:value
@@ -302,17 +315,33 @@ def main():
     threshold = 0.70
 
     # Getting the list of tokens to not consider
-    drop_tokens = set(
-        [token for token, freq in doc_freqs.items()
-         if ((freq >= threshold * corpus_size) or (freq <= 5))])
+    #  drop_tokens = set(
+        #  [token for token, freq in doc_freqs.items()
+         #  if ((freq >= threshold * corpus_size) or (freq <= 5))])
+
+    drop_tokens = []
+
+    logging.info(f"{len(drop_tokens)} tokens are being removed")
 
     _ = [(corpus_freqs.pop(token), doc_freqs.pop(token)) for token in
          drop_tokens]
 
     # Inverse documents frequencies
-    inv_doc_freqs = {
+    logging.info("Getting IDFs of tokens")
+    idf_neg = {
         token: idf(corpus_size, value)
         for token, value in doc_freqs.items()}
+
+    avg_idf = sum(idf_neg.values()) * 1./len(idf_neg.keys())
+    epsilon = 0.25
+
+    # Converting away negative idf values
+    inv_doc_freqs = {}
+    for k, v in idf_neg.items():
+        if v < 0:
+            inv_doc_freqs[k] = epsilon * avg_idf
+        else:
+            inv_doc_freqs[k] = v
 
     # Sorting
     inv_doc_freqs = {
@@ -321,8 +350,9 @@ def main():
             inv_doc_freqs.items(), key=lambda x: x[1]))}
 
     # Per Document Frequencies
+    logging.info("Getting per-document token freqs for meta-documents")
     per_doc_freqs = get_doc_freqs(
-        train_texts, dictionary, drop_tokens)
+        adv_concat, dictionary, drop_tokens)
 
     # Document Lengths
     per_doc_lens = {
@@ -339,11 +369,13 @@ def main():
 
     # Computing the BM25 scores for the test documents
     for idx in test_doc_ids:
+        logging.info(f"Computing BM25 scores for {idx}")
         with open(os.path.join(args.file_path, f"{idx}.txt"), 'r') as f:
             test_text = f.read()
         if (test_text == ''):
             continue
-        test_texts[idx] = process(test_text)
+        #  test_texts[idx] = process(test_text)
+        test_texts[idx] = test_text.split()
 
     test_doc_freqs = get_doc_freqs(
         test_texts, dictionary, drop_tokens)

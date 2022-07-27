@@ -1,5 +1,10 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
-source ~/workEnv/bin/activate
+FOLDS=4
 
-python get_freqs.py -f ~/Datasets/Delhi101/rhetorical_roles/facts_skip10/ -d ~/Datasets/Delhi101/processed_data/cross_val/ -o ~/Project_Results/AdvocateRecommendation/bm25/ -n 20 -l 0 1 2 3 4
+for fold in $(seq 0 $FOLDS)
+do
+    ./bm25.py -f ~/Datasets/DHC/variations/var_2/data/ipc_data/fact_sentences/ \
+        -d ~/Datasets/DHC/variations/var_2/data/ipc_data/cross_val/20_fold/fold_$fold/adv_case_splits.json \
+        -o ~/Results/advocate_recommendation/exp_2/new_cross_val/20_fold/fold_$fold/
+done
