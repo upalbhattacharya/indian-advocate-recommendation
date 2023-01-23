@@ -1,0 +1,10 @@
+{
+    "num_epochs": 50,
+    "lr": 1e-3,
+    "batch_size": 32,
+    "input_dim": 300,
+    "embed_dim": 300,
+    "threshold": 0.5,
+    "save_every": 1,
+    "update_grad_every": 4
+}

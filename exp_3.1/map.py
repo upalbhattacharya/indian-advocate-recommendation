@@ -2,15 +2,19 @@
 # -*- encoding: utf-8 -*-
 
 # Birth: 2022-06-01 13:37:43.320164588 +0530
-# Modify: 2022-07-27 20:53:19.494892602 +0530
+# Modify: 2022-09-05 14:54:37.283523914 +0530
 
 """Calculate precision, recall and mAP for queries."""
 
 import argparse
 import json
+import logging
 import os
+import sys
 
 import numpy as np
+
+from utils import set_logger
 
 __author__ = "Upal Bhattacharya"
 __license__ = ""
@@ -193,14 +197,24 @@ def main():
                         help="Threshold when using mAP lenient.")
     parser.add_argument("-n", "--name",
                         help="Name of mAP strategy.")
+    parser.add_argument("-o", "--output_path",
+                        help="Path to save generated data")
+    parser.add_argument("-l", "--log_path", type=str, default=None,
+                        help="Path to save generated logs")
 
     args = parser.parse_args()
+    if args.log_path is None:
+        args.log_path = args.output_path
+
+    set_logger(os.path.join(args.log_path, "map"))
+    logging.info("Inputs:")
+    for name, value in vars(args).items():
+        logging.info(f"{name}: {value}")
 
     with open(args.scores_path, 'r') as f:
         scores = json.load(f)
 
-    output_path, _ = os.path.split(args.scores_path)
-    output_path = os.path.join(output_path, args.name)
+    output_path = os.path.join(args.output_path, args.name)
     if not os.path.exists(output_path):
         os.makedirs(output_path)
 
@@ -212,7 +226,7 @@ def main():
         targets = json.load(f)
 
     # Removing any items used for other tasks and not part of the end-task
-    print(f"There are {len(scores.keys())} originally.")
+    logging.info(f"There are {len(scores.keys())} items originally.")
 
     # TODO: must be a better way
     with open(args.items_to_consider_dict, 'r') as f:
@@ -224,7 +238,7 @@ def main():
     scores = {
             k: v for k, v in scores.items()
             if k in relevant_items}
-    print(f"After removing certain items, {len(scores.keys())} items remain.")
+    logging.info(f"After removing items, {len(scores.keys())} items remain.")
 
     # Load extra data for mAP lenient
     case_charges = None
@@ -241,6 +255,7 @@ def main():
         threshold = args.threshold
 
     # Creating the array to actual targets
+    logging.info("Getting gold standard targets")
     array_actual, array_lenient = create_targets(
                                                 targets_dict=targets,
                                                 adv_index=adv_index,
@@ -257,7 +272,8 @@ def main():
               case_id, pred in scores.items()}
 
     # Top K
-    top_k = np.arange(start=1, stop=len(adv_index.keys()))
+    top_k = np.arange(start=1, stop=len(adv_index.keys()) + 1)
+    logging.info(f"mAP will be calculated over {len(top_k)} database items")
 
     # For storing the precision and recall scores across different thresholds
     precision_scores = []
@@ -269,6 +285,7 @@ def main():
 
     for k in top_k:
         # constant array
+        logging.info(f"Calculating precision and recall at {k}")
         array_k = [k for _ in range(len(scores.keys()))]
         array_pred = vectorize_prediction(scores, adv_index, array_k)
 
@@ -287,6 +304,7 @@ def main():
         recall_scores.append(rec)
 
     # Computing relevance for AP calculation
+    logging.info("Getting relevance")
     relevance = relevance_at_k(scores, adv_index, array_actual_lenient)
 
     # Stacking along first axis Shape = (top_k, num_queries)
@@ -298,6 +316,7 @@ def main():
     recall_scores = recall_scores.T
 
     # R-Precision calculation
+    logging.info("Calculating R-Precision")
     array_k = np.sum(array_actual_lenient, axis=1)
     array_pred = vectorize_prediction(scores, adv_index, array_k)
     rprec_scores, _ = per_query_prec_rec(array_actual_lenient,
@@ -314,6 +333,7 @@ def main():
         ap_scores.append(ap)
 
     # Calculating the query mAP
+    logging.info("Calculating mAP")
     mean_ap = mAP(ap_scores)
 
     # Sorting the AP scores in descending order
@@ -326,6 +346,7 @@ def main():
     rprec_dict = numpy_to_dict(np.column_stack((rprec_scores, array_k)),
                                list(scores.keys()), 'RP')
     # Saving all the generated data
+    logging.info("Saving all data")
     with open(os.path.join(output_path, "per_query_precision.json"),
               'w+') as f:
         json.dump(prec_dict, f, indent=4)

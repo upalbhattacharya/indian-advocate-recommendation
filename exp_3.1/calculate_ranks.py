@@ -1,17 +1,20 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 
-# Birth: 2022-05-04 11:10:12.168274551 +0530
-# Modify: 2022-05-04 12:07:36.075032468 +0530
+# Birth: 2022-09-05 12:32:51.755463991 +0530
+# Modify: 2022-09-05 12:32:52.031465856 +0530
 
 """Calculate ranked-based similarity of advocates and test cases."""
 
 import argparse
 import json
+import logging
 import os
 from collections import defaultdict
 
 import numpy as np
+
+from utils import set_logger
 
 __author__ = "Upal Bhattacharya"
 __copyright__ = ""
@@ -55,8 +58,17 @@ def main():
                         help="Path to original similarity scores.")
     parser.add_argument("-o", "--output_path",
                         help="Path to save generated ranking.")
+    parser.add_argument("-l", "--log_path", type=str, default=None,
+                        help="Path to save generated logs")
 
     args = parser.parse_args()
+    if args.log_path is None:
+        args.log_path = args.output_path
+
+    set_logger(os.path.join(args.log_path, "calculate_ranks"))
+    logging.info("Inputs:")
+    for name, value in vars(args).items():
+        logging.info(f"{name}: {value}")
 
     # Getting the case targets
     with open(args.case_targets_path, 'r') as f:
@@ -71,6 +83,7 @@ def main():
 
     # List of targets
     rel_targets = list(adv_case_splits.keys())
+    logging.info(f"{len(rel_targets)} targets are considered")
 
     # Relevant cases for targets
     targets_relevant = defaultdict(lambda: list())
@@ -81,6 +94,7 @@ def main():
 
     reranked_similarity = {}
     for case in scores.keys():
+        logging.info(f"Combining scores to get ranks for test query {case}")
         reranked_similarity[case] = rerank(scores[case], targets_relevant)
 
     # Saving the ranking of the queries

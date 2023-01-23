@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 # Birth: 2022-07-21 16:48:02.990301418 +0530
-# Modify: 2022-07-25 14:58:57.856169430 +0530
+# Modify: 2022-07-25 15:09:25.643724326 +0530
 
 """Training and evaluation for BertMultiLabel"""
 
 import argparse
 import logging
 import os
+import sys
 import time
 
 import numpy as np
@@ -146,8 +147,7 @@ def main():
     args = parser.parse_args()
 
     # Setting logger
-    timestr = time.strftime("%Y%m%d%H%M%S")
-    utils.set_logger(os.path.join(args.exp_dir, f"{args.name}_{timestr}.log"))
+    utils.set_logger(os.path.join(args.exp_dir, f"{args.name}"))
 
     # Selecting correct device to train and evaluate on
     if not torch.cuda.is_available() and args.device == "cuda":
@@ -159,9 +159,18 @@ def main():
 
     logging.info(f"Device is {args.device}.")
 
+    logging.info("Inputs:")
+    for name, value in vars(args).items():
+        logging.info(f"{name}: {value}")
+
     # Loading parameters
     params_path = os.path.join(args.exp_dir, "params", f"{args.params}")
-    assert os.path.isfile(params_path), f"No params file at {params_path}"
+    try:
+        if not os.path.isfile(params_path):
+            raise FileNotFoundError(f"No params file at {params_path}")
+    except FileNotFoundError as e:
+        logging.error(repr(e))
+        sys.exit(1)
     params = utils.Params(params_path)
 
     # Setting seed for reproducability

@@ -1,21 +1,26 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf8 -*-
-# Birth: 2021-12-28 11:17:05.197975110 +0530
-# Modify: 2022-05-03 11:57:18.494711259 +0530
+# Birth: 2022-06-01 13:37:43.400170813 +0530
+# Modify: 2022-08-31 14:51:51.416631595 +0530
 
 """Train doc2vec on training documents."""
 
 import argparse
 import json
+import logging
 import os
 import pickle
-from string import punctuation
 import re
+from itertools import chain
+from string import punctuation
 
+import numpy as np
 import pandas as pd
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+
+from utils import process, set_logger
 
 __author__ = "Upal Bhattacharya"
 __license__ = ""
@@ -26,18 +31,6 @@ __email__ = "upal.bhattacharya@gmail.com"
 pattern = rf"[{punctuation}\s]+"
 stopwords = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
-
-
-def process(text):
-    """Carry out processing of given text."""
-    processed = list(filter(None, [re.sub('[^0-9a-zA-Z]+', '',
-                                          token.lower())
-                                   for token in re.split(pattern, text)]))
-
-    # Removing tokens of length 1
-    processed = [token for token in processed if len(token) > 1]
-
-    return processed
 
 
 def create_pd(split_dict, base_path):
@@ -55,8 +48,8 @@ def create_pd(split_dict, base_path):
     df : pandas.Series
         Pandas Series containing the texts of the training documents
 
-    Notes
-    -----
+    Remarks
+    -------
     Takes a dictionary containing the train, test and validation document
     splits of each advocate and creates a Pandas Series object from the
     training documents. Applies pre-processing on the documents.
@@ -66,9 +59,10 @@ def create_pd(split_dict, base_path):
     train_doc_ids = set()
     train_docs_dict = {}
 
-    _ = [train_doc_ids.update([
-        idx for idx in [*cases["train"], *cases["db"]]])
-        for adv, cases in split_dict.items()]
+    train_doc_ids = set(chain.from_iterable([cases["train"]
+                                             for cases in
+                                             split_dict.values()]))
+    logging.info(f"{len(train_doc_ids)} documents to be used for training")
 
     # Loading the document texts into a dictionary
     for idx in train_doc_ids:
@@ -93,18 +87,26 @@ def main():
                         help="Number of epochs to train Doc2Vec models on.")
     parser.add_argument("-o", "--output_path",
                         help="Path to save generated embeddings.")
+    parser.add_argument("-l", "--log_path", type=str, default=None,
+                        help="Path to save generated logs")
 
     args = parser.parse_args()
+
+    if args.log_path is None:
+        args.log_path = args.output_path
+
+    set_logger(os.path.join(args.log_path, "train"))
+    logging.info("Inputs:")
+    for name, value in vars(args).items():
+        logging.info(f"{name}: {value}")
 
     with open(args.dict_path, 'r') as f:
         adv_case_splits = json.load(f)
 
-    db_cases = list(set([case for adv in adv_case_splits.values()
-                         for case in adv["db"]]))
-
     df = create_pd(adv_case_splits, args.data_path)
     tagged_docs = [TaggedDocument(txt, [idx]) for idx, txt in df.iteritems()]
 
+    logging.info("Training model")
     model = Doc2Vec(
         vector_size=300, epochs=args.epochs)
     model.build_vocab(tagged_docs)
@@ -112,24 +114,21 @@ def main():
         tagged_docs, total_examples=model.corpus_count,
         epochs=model.epochs)
 
-    model.dv.save(os.path.join(args.output_path, "d2v.docvectors"))
-    model.wv.save(os.path.join(args.output_path, "d2v.wordvectors"))
-    model.save(os.path.join(args.output_path, "d2v.model"))
+    logging.info("Saving model vectors and states")
+    model.dv.save(os.path.join(args.output_path, "model", "d2v.docvectors"))
+    model.wv.save(os.path.join(args.output_path, "model", "d2v.wordvectors"))
+    model.save(os.path.join(args.output_path, "model", "d2v.model"))
 
+    if not os.path.exists(os.path.join(args.output_path, "embeddings",
+                                       "train_rep")):
+        os.makedirs(os.path.join(args.output_path, "embeddings", "train_rep"))
+
+    logging.info("Saving training representations")
     dv = model.dv
-    db_dict = {}
-    train_dict = {}
     for key in dv.index_to_key:
-        if (key in db_cases):
-            db_dict[key] = dv[key]
-        else:
-            train_dict[key] = dv[key]
-
-    with open(os.path.join(args.output_path, "db_rep.pkl"), 'wb') as f:
-        pickle.dump(db_dict, f)
-
-    with open(os.path.join(args.output_path, "train_rep.pkl"), 'wb') as f:
-        pickle.dump(train_dict, f)
+        with open(os.path.join(args.output_path, "embeddings", "train_rep",
+                               f"{key}.npy"), 'wb') as f:
+            np.save(f, dv[key])
 
 
 if __name__ == "__main__":

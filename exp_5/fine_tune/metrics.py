@@ -1,13 +1,14 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
-# 
-# 
+# Birth: 2022-06-01 13:37:06.213340231 +0530
+# Modify: 2022-05-12 10:11:38.944366100 +0530
 
 """Metrics to be calculated for the model."""
 
 from typing import MutableSequence
 
 import numpy as np
+from sklearn.metrics import precision_recall_fscore_support as prfs
 
 __author__ = "Upal Bhattacharya"
 __license__ = ""
@@ -16,8 +17,8 @@ __version__ = "1.0"
 __email__ = "upal.bhattacharya@gmail.com"
 
 
-def f1(outputs_batch: MutableSequence,
-       targets_batch: MutableSequence, target_names: list[str]) -> dict:
+def custom_f1(outputs_batch: MutableSequence,
+              targets_batch: MutableSequence, target_names: list[str]) -> dict:
     """Calculate per class and macro F1 between the given predictions
     and targets
 
@@ -75,6 +76,63 @@ def f1(outputs_batch: MutableSequence,
         'recall': per_class_rec,
         'f1': per_class_f1,
         'macro_f1': macro_f1,
+        }
+
+    return scores
+
+
+def f1(outputs_batch: MutableSequence,
+       targets_batch: MutableSequence, target_names: list[str]) -> dict:
+    """Calculate per class and macro F1 between the given predictions
+    and targets
+
+    Parameters
+    ----------
+    outputs_batch : MutableSequence
+        Predictions of a batch.
+    targets_batch : MutableSequence
+        Targets of the batch.
+    target_names  : list[str]
+        Names of targets.
+
+    Returns
+    -------
+    scores : dict
+        Dictionary containing the metric values.
+
+    """
+    class_metrics = prfs(targets_batch, outputs_batch, average=None)
+    per_class_prec, per_class_rec, per_class_f1, per_class_sup = class_metrics
+
+    macro_metrics = prfs(targets_batch, outputs_batch, average='macro')
+    macro_prec, macro_rec, macro_f1, macro_sup = macro_metrics
+
+    micro_metrics = prfs(targets_batch, outputs_batch, average='micro')
+    micro_prec, micro_rec, micro_f1, micro_sup = micro_metrics
+
+    # Converting metrics to dictionaries for easier understanding
+    per_class_prec = {
+            k: per_class_prec[i] for i, k in enumerate(target_names)}
+    per_class_rec = {
+            k: per_class_rec[i] for i, k in enumerate(target_names)}
+    per_class_f1 = {
+            k: per_class_f1[i] for i, k in enumerate(target_names)}
+    per_class_sup = {
+            k: per_class_sup[i] for i, k in enumerate(target_names)}
+
+    scores = {
+        'precision': per_class_prec,
+        'recall': per_class_rec,
+        'f1': per_class_f1,
+        'sup': per_class_sup,
+        'macro_prec': macro_prec,
+        'macro_rec': macro_rec,
+        'macro_f1': macro_f1,
+        'macro_sup': macro_sup,
+        'micro_prec': micro_prec,
+        'micro_rec': micro_rec,
+        'micro_f1': micro_f1,
+        'micro_sup': micro_sup
         }
 
     return scores

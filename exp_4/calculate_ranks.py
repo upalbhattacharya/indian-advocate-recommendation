@@ -1,24 +1,25 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
 
-# Birth: 2022-06-19 09:06:40.296382904 +0530
-# Modify: 2022-06-19 09:06:40.436376494 +0530
+# Birth: 2022-09-05 12:32:51.755463991 +0530
+# Modify: 2022-09-05 12:32:52.031465856 +0530
 
 """Calculate ranked-based similarity of advocates and test cases."""
 
 import argparse
 import json
+import logging
 import os
 from collections import defaultdict
 
-import torch
-from scipy.spatial.distance import cdist
 import numpy as np
+
+from utils import set_logger
 
 __author__ = "Upal Bhattacharya"
 __copyright__ = ""
 __license__ = ""
-__version__ = "1.0"
+__version__ = "1.1"
 __email__ = "upal.bhattacharya@gmail.com"
 
 
@@ -46,91 +47,55 @@ def rerank(sim_dict: dict[float], targets_relevant: list[str]) -> dict[float]:
     return scores
 
 
-def get_target_ranking(embed: torch.tensor,
-                       db: dict[torch.tensor]) -> dict[float]:
-
-    db_stack = torch.squeeze(torch.stack((list(db.values())), dim=0))
-
-    similarity = cdist(embed.view(1, -1),
-                       db_stack,
-                       metric=cosine)
-
-    similarity = np.squeeze(similarity)
-    sim_dict = {}
-    for target, sim in zip(db.keys(), similarity):
-        sim_dict[target] = sim
-
-    sim_dict = {
-            k: v for k, v in sorted(sim_dict.items(),
-                                    key=lambda x: x[1],
-                                    reverse=True)}
-
-    return sim_dict
-
-
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-q", "--query_path",
-                        help="Path to query embeddings")
-    parser.add_argument("-d", "--database_path",
-                        help="Path to database embeddings")
+    parser.add_argument("-d", "--dict_path",
+                        help="Path to advocate case split information.")
     parser.add_argument("-ct", "--case_targets_path",
-                        help="Path to case targets(global, not fold-specific)")
-    parser.add_argument("-a", "---targets_dict",
-                        help="Dictionary of targets to consider.")
+                        help="Path to case targets.")
+    parser.add_argument("-s", "--scores_path",
+                        help="Path to original similarity scores.")
     parser.add_argument("-o", "--output_path",
-                        help="Path to save generated ranking")
+                        help="Path to save generated ranking.")
+    parser.add_argument("-l", "--log_path", type=str, default=None,
+                        help="Path to save generated logs")
 
     args = parser.parse_args()
+    if args.log_path is None:
+        args.log_path = args.output_path
 
-    # Getting the global case targets
+    set_logger(os.path.join(args.log_path, "calculate_ranks"))
+    logging.info("Inputs:")
+    for name, value in vars(args).items():
+        logging.info(f"{name}: {value}")
+
+    # Getting the case targets
     with open(args.case_targets_path, 'r') as f:
         case_targets = json.load(f)
 
-    # Getting targets to be considered
-    with open(args.targets_dict, 'r') as f:
-        targets_dict = json.load(f)
+    # Getting the scores
+    with open(args.scores_path, 'r') as f:
+        scores = json.load(f)
 
-    rel_targets = list(targets_dict.values())
+    with open(args.dict_path, 'r') as f:
+        adv_case_splits = json.load(f)
 
-    # List of actual targets
-    all_targets = list(set([value for values in case_targets.values()
-                       for value in values]).intersection(
-                            set(rel_targets)))
+    # List of targets
+    rel_targets = list(adv_case_splits.keys())
+    logging.info(f"{len(rel_targets)} targets are considered")
 
     # Relevant cases for targets
     targets_relevant = defaultdict(lambda: list())
-    for case, case_targets in case_targets.items():
-        targets = list(set(all_targets).intersection(set(case_targets)))
+    for case, targets in case_targets.items():
+        targets = list(set(targets).intersection(set(rel_targets)))
         for target in targets:
             targets_relevant[target].append(case)
 
-    # Loading in the databank cases
-    db = {}
-    for db_embed in os.listdir(args.database_path):
-        name = os.path.splitext(db_embed)[0]
-
-        # WARNING
-        # May be memory prohibitive when database is very large
-        db[name] = torch.load(os.path.join(args.database_path, db_embed))
-
-    ranked_similarity = {}
     reranked_similarity = {}
-    # Calculated one at a time due to memory constraints
-    for query_embed in os.listdir(args.query_path):
-        name = os.path.splitext(query_embed)[0]
-
-        embed = torch.load(os.path.join(args.query_path, query_embed))
-
-        ranked_similarity[name] = get_target_ranking(embed, db)
-        reranked_similarity[name] = rerank(ranked_similarity[name],
-                                           targets_relevant)
-
-    # Saving the ranking of the queries
-    with open(os.path.join(args.output_path, "similarity_ranking.json"),
-              'w') as f:
-        json.dump(ranked_similarity, f, indent=4)
+    for case in scores.keys():
+        logging.info(f"Combining scores to get ranks for test query {case}")
+        reranked_similarity[case] = rerank(scores[case], targets_relevant)
 
     # Saving the ranking of the queries
     with open(os.path.join(args.output_path, "similarity_reranking.json"),

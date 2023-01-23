@@ -1,13 +1,14 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
-# Birth: 2022-03-21 12:06:17.571342513 +0530
-# Modify: 2022-05-12 12:17:37.104402983 +0530
+# Birth: 2022-06-01 13:37:06.213340231 +0530
+# Modify: 2022-05-17 17:59:56.267533100 +0530
 
 """Training and evaluation methods for model."""
 
 import argparse
 import logging
 import os
+import sys
 
 import numpy as np
 import torch
@@ -238,11 +239,18 @@ def main():
         args.device = f"cuda:{args.device_id}"
 
     logging.info(f"Device is {args.device}.")
+    logging.info("Inputs:")
+    for name, value in vars(args).values():
+        logging.info(f"{name}: {value}")
 
     # Loading model parameters
     params_path = os.path.join(args.exp_dir, "params", f"{args.params}")
-    assert os.path.isfile(
-            params_path), f"No configuration file found at {params_path}."
+    try:
+        if not os.path.isfile(params_path):
+            raise FileNotFoundError(f"No params file at {params_path}")
+    except FileNotFoundError as e:
+        logging.error(repr(e))
+        sys.exit(1)
     params = utils.Params(params_path)
 
     # Setting a seed for reproducability

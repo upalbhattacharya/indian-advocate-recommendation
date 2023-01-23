@@ -26,27 +26,23 @@ def time_logger(original_func):
     return wrapper
 
 
-def set_logger(log_path):
-    """Set logger to log information to the terminal and the specified path.
-
-    Parameters
-    ----------
-    log_path : str
-        Path to log run-stats to.
-    """
-
+def set_logger(log_path: str):
+    """Logger"""
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
+
+    timestamp = time.strftime("%Y-%m-%d-%H-%m-%S")
+    log_path = log_path + "_" + timestamp + ".log"
 
     if not logger.handlers:
-        # FileHandler to log to a file
+
         file_handler = logging.FileHandler(log_path)
         file_handler.setFormatter(logging.Formatter(
-            "%(asctime)s : [%(levelname)s] %(message)s",
-            "%Y-%m-%d %H:%M:%S"))
+                "%(asctime)s: [%(levelname)s] %(message)s",
+                "%Y-%m-%d %H:%M:%S"))
+
         logger.addHandler(file_handler)
 
-        # StreamHandler to log to terminal
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(logging.Formatter(
             "%(asctime)s : [%(levelname)s] %(message)s",
@@ -95,6 +91,8 @@ def process(text):
                                    for token in re.split(pattern, text)]))
 
     # Removing tokens of length 1
-    processed = [token for token in processed if len(token) > 1]
+    processed = [lemmatizer.lemmatize(token)
+                 for token in processed
+                 if len(token) > 1 and token not in stopwords]
 
     return processed

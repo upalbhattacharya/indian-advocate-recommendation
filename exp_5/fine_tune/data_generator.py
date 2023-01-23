@@ -1,13 +1,14 @@
 #!/usr/bin/env pythot
 # -*- encoding: utf-8 -*-
 # Birth: 2022-07-21 16:48:02.702290180 +0530
-# Modify: 2022-07-25 16:07:35.933651093 +0530
+# Modify: 2022-08-30 20:32:00.184061408 +0530
 
 """Data loaders for SBERT"""
 
 import json
 import logging
 import os
+from collections import defaultdict
 from itertools import combinations, groupby
 from random import sample, shuffle
 
@@ -159,6 +160,10 @@ class SBertTrainerDataset(Dataset):
         self.min_sim = min_sim
         self.max_sim = max_sim
 
+        logging.info("Provided values:")
+        for name, value in vars(self).items():
+            logging.info(f"[DATASET] {name}: {value}")
+
         self.targets_dict = self.get_targets()
         self.text_paths = self.get_fullpaths()
 
@@ -173,21 +178,15 @@ class SBertTrainerDataset(Dataset):
         if self.similarity == "jaccard":
             self.sim_func = self.jaccard
 
-        # Getting all pairs
-        logging.info("[DATASET] Generating all combinations")
-        #  self.all_combinations = [(idx_1, idx_2)
-                                 #  for idx_1, idx_2 in combinations(
-                                            #  range(len(self.text_paths)), 2)]
-
-        self.all_combinations = [(idx_1, idx_2)
-                                 for idx_1, idx_2 in combinations(
-                                            range(10), 2)]
         self.idx = {i: k for i, k in enumerate(self.text_paths)}
-        # Computing similarity scores (used for sampling)
-        self.sim_scores = self.pair_sim_scores()
+
+        # Getting all pairs
+        logging.info("[DATASET] Generating all combinations and similarities")
+
+        # Computing similarity scores and getting bins
+        self.sim_scores, self.all_combinations, self.bin_group_idxs = self.pair_sim_scores()
 
         if self.sample == "equal":
-
             logging.info(f"[DATASET] Retaining pairs by {self.sample} sampling")
             self.sim_scores, self.all_combinations = self.equal_sample()
 
@@ -271,36 +270,50 @@ class SBertTrainerDataset(Dataset):
                             dtype=torch.float32)
 
     def pair_sim_scores(self):
-        sim_scores = []
-        for i, (idx_1, idx_2) in enumerate(self.all_combinations):
-            target_1 = self.fetch_target(self.idx[idx_1])
-            target_2 = self.fetch_target(self.idx[idx_2])
-            sim_scores.append(self.sim_func(target_1, target_2))
-        return sim_scores
+        sim_scores = {}
+        all_combinations = {}
 
-    def equal_sample(self):
         bins = np.arange(self.min_sim, self.max_sim,
                          (self.max_sim - self.min_sim) * 1./self.steps)
-        bin_idxs = np.digitize(self.sim_scores, bins=bins)
-        logging.info("[DATASET] Creating bins for sampling")
-        bin_groups = {
-                key: [item[0] for item in group]
-                for key, group in tqdm(groupby(sorted(enumerate(bin_idxs),
-                                       key=lambda x: x[1]), lambda x: x[1]))
-                 }
-        sizes = list(map(lambda x: len(bin_groups[x]), bin_groups))
+        bin_group_idxs = defaultdict(list)
+
+        for i, (idx_1, idx_2) in tqdm(enumerate(combinations(
+                                          range(len(self.text_paths)), 2))):
+            all_combinations[i] = (idx_1, idx_2)
+            target_1 = self.fetch_target(self.idx[idx_1])
+            target_2 = self.fetch_target(self.idx[idx_2])
+            sim_scores[i] = self.sim_func(target_1, target_2)
+            bin = np.digitize(sim_scores[i], bins=bins)[0][0]
+            bin_group_idxs[bin].append(i)
+        return sim_scores, all_combinations, bin_group_idxs
+
+    def equal_sample(self):
+        #  bins = np.arange(self.min_sim, self.max_sim,
+                         #  (self.max_sim - self.min_sim) * 1./self.steps)
+        #  bin_idxs = np.digitize(self.sim_scores, bins=bins)
+        #  logging.info("[DATASET] Creating bins for sampling")
+        #  bin_groups = {
+                #  key: [item[0] for item in group]
+                #  for key, group in tqdm(groupby(sorted(enumerate(bin_idxs),
+                                       #  key=lambda x: x[1]), lambda x: x[1]))
+                 #  }
+        sizes = list(map(lambda x: len(self.bin_group_idxs[x]),
+                         self.bin_group_idxs))
         logging.info(f"[DATASET] bins sizes are {sizes}")
         least = max(min(sizes), self.least)
         selected = []
-        for k, v in bin_groups.items():
-            selected.extend(sample(v, min(len(v), least)))
+        for k, v in self.bin_group_idxs.items():
+            sample_count = min(len(v), least)
+            logging.info(f"[DATASET] Sampling {sample_count} items for bin {k}")
+            selected.extend(sample(v, sample_count))
 
         shuffle(selected)
+        logging.info(f"[DATASET] Training on {len(selected)} pairs")
         sim_scores = []
         all_combinations = []
-        #  for idx in selected:
-            #  sim_scores.append[self.sim_scores[idx]]
-            #  all_combinations.append[self.all_combinations[idx]]
-        sim_scores = [self.sim_scores[idx] for idx in selected]
-        all_combinations = [self.all_combinations[idx] for idx in selected]
+        for idx in selected:
+            sim_scores.append(self.sim_scores[idx])
+            all_combinations.append(self.all_combinations[idx])
+        #  sim_scores = [self.sim_scores[idx] for idx in selected]
+        #  all_combinations = [self.all_combinations[idx] for idx in selected]
         return sim_scores, all_combinations

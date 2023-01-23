@@ -1,4 +1,4 @@
-#!/usr/bin/sh
+#!/usr/bin/env sh
 
 FOLDS=4
 
@@ -6,9 +6,9 @@ FOLDS=4
 
 for fold in $(seq 0 $FOLDS)
 do
-    python calculate_ranks.py -d ~/Results/advocate_recommendation/exp_1_thresh_0.7/embeddings/han_pred_DHC_SC_new_facts_fold_$fold/train/ \
-        -q ~/Results/advocate_recommendation/exp_1_thresh_0.7/embeddings/han_pred_DHC_SC_new_facts_fold_$fold/test/ \
-        -ct ~/Datasets/DHC/common/case_advs.json \
-        -a ~/Datasets/DHC/common/selected_advs.json \
-        -o ~/Results/advocate_recommendation/exp_1_thresh_0.7/metrics/han_pred_DHC_SC_new_facts_fold_$fold/
+    python calculate_ranks.py -d ~/Datasets/DHC/variations/new/var_1/cross_val/5_fold/fold_$fold/adv_split_info.json \
+        -ct ~/Datasets/DHC/variations/new/var_1/targets/case_advs.json \
+        -s ~/Results/advocate_recommendation/new/exp_3.1/cross_val/5_fold/fold_$fold/results/scores.json \
+        -o ~/Results/advocate_recommendation/new/exp_3.1/cross_val/5_fold/fold_$fold/results/ \
+        -l ~/Results/advocate_recommendation/new/exp_3.1/cross_val/5_fold/fold_$fold/logs/
 done

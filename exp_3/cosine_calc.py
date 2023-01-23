@@ -1,16 +1,19 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf-8 -*-
-# Birth: 2021-12-28 11:17:05.837975113 +0530
-# Modify: 2022-05-03 13:41:57.258211853 +0530
+# Birth: 2022-06-01 13:37:43.400170813 +0530
+# Modify: 2022-09-05 18:37:17.087570092 +0530
 
 """Compute cosine similarities between advocate and test representations."""
 
 import argparse
 import json
+import logging
 import os
 
 import numpy as np
 import pandas as pd
+
+from utils import set_logger
 
 __author__ = "Upal Bhattacharya"
 __copyright__ = ""
@@ -27,6 +30,7 @@ def get_scores(query, corpus, similarity):
     """Computes cosine similarity between query and corpus."""
     scores = {}
     for idx in query:
+        logging.info(f"Getting similarity scores for query {idx}")
         scores[idx] = {
             k: similarity(query[idx], corpus[k])
             for k in corpus}
@@ -43,25 +47,37 @@ def get_scores(query, corpus, similarity):
 def main():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--data_path",
-                        help="Path to load data from.")
+    parser.add_argument("-d", "--database_embed_path",
+                        help="Path to load database embeddings from.")
+    parser.add_argument("-q", "--query_embed_path",
+                        help="Path to load query embeddings from.")
     parser.add_argument("-o", "--output_path",
                         help="Path to save generated scores.")
-    parser.add_argument("-s", "--segments", nargs="+", type=str,
-                        default=["test", "val"],
-                        help=("Segments to consider. Options are:"
-                              "'test', 'val'"))
+    parser.add_argument("-l", "--log_path", type=str, default=None,
+                        help="Path to save generated logs")
     args = parser.parse_args()
+    if args.log_path is None:
+        args.log_path = args.output_path
+    set_logger(os.path.join(args.log_path, "cosine_calc"))
+    logging.info("Inputs:")
+    for name, value in vars(args).items():
+        logging.info(f"{name}: {value}")
 
-    scores = {}
+    # Loading representations
+    logging.info("Loading database and query embeddings")
+    db_embeds = {}
+    q_embeds = {}
+    for fl in os.listdir(args.database_embed_path):
+        flname = os.path.splitext(fl)[0]
+        with open(os.path.join(args.database_embed_path, fl), 'rb') as f:
+            db_embeds[flname] = np.load(f)
 
-    # Loading the advocate representations
-    adv_df = pd.read_pickle(os.path.join(args.data_path, "adv_rep.pkl"))
+    for fl in os.listdir(args.query_embed_path):
+        flname = os.path.splitext(fl)[0]
+        with open(os.path.join(args.query_embed_path, fl), 'rb') as f:
+            q_embeds[flname] = np.load(f)
 
-    for seg in args.segments:
-        df = pd.read_pickle(os.path.join(args.data_path, f"{seg}_rep.pkl"))
-
-        scores.update(get_scores(df, adv_df, cosine))
+    scores = get_scores(q_embeds, db_embeds, cosine)
 
     with open(os.path.join(args.output_path, "scores.json"), 'w') as f:
         json.dump(scores, f, indent=4)

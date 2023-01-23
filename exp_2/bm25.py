@@ -1,7 +1,7 @@
 #!/home/workboots/VirtualEnvs/aiml/bin/python3
 # -*- encoding: utf8 -*-
 # Birth: 2022-06-01 13:37:43.216156496 +0530
-# Modify: 2022-07-26 21:14:19.336633380 +0530
+# Modify: 2022-09-05 12:07:51.320249315 +0530
 
 """
 Script that trains a bm25 model on the train dataset case files.
@@ -16,6 +16,7 @@ import math
 import os
 import re
 import string
+import sys
 import time
 from string import punctuation
 
@@ -58,10 +59,22 @@ def create_concat_text(doc_id_list, data_path):
     docs = {}
     for doc_id in doc_id_list:
         flname = doc_id
-        if (os.path.exists(os.path.join(data_path, f"{flname}.txt"))):
-            with open(os.path.join(data_path, f"{flname}.txt"), 'r') as f:
-                #  docs[flname] = f.read().split()
-                docs[flname] = process(f.read())
+        try:
+            if (os.path.exists(os.path.join(data_path, f"{flname}.txt"))):
+                with open(os.path.join(data_path, f"{flname}.txt"), 'r') as f:
+                    #  docs[flname] = f.read().split()
+                    docs[flname] = process(f.read())
+                    if docs[flname] == '':
+                        raise ValueError((f"Found empty document {flname}."
+                                          "Documents cannot be empty"))
+            else:
+                raise FileNotFoundError(f"{flname}.txt not found")
+        except FileNotFoundError as f:
+            logging.error(repr(f))
+            sys.exit(1)
+        except ValueError as e:
+            logging.error(repr(e))
+            sys.exit(1)
 
     # Concatenating into one document
     doc_concat = [token for doc in docs.values() for token in doc]
@@ -125,14 +138,14 @@ def convert_to_token_dict(corpus_dict, idx_dict):
     return formatted_dict
 
 
-def write_to_dir(obj, path, name, ext="json"):
+def write_to_dir(obj, paths, name, ext="json"):
     """Write object to path with given extenstion.
 
     Parameters
     ----------
     obj : object
         Object to be saved.
-    path : str
+    paths : list
         Path to save file.
     name : str
         Name to use for saving.
@@ -140,7 +153,7 @@ def write_to_dir(obj, path, name, ext="json"):
         Extension to use for saving.
     """
 
-    with open(os.path.join(path, f"{name}.{ext}"), 'w') as f:
+    with open(os.path.join(*paths, f"{name}.{ext}"), 'w') as f:
         if (ext == 'json'):
             json.dump(obj, f, indent=4)
         else:
@@ -254,6 +267,31 @@ def get_doc_freqs(doc_dict, corpus_dict, drop_tokens):
     return dict_obj
 
 
+def get_tf_idf_vector(freqs, inv_doc_freqs, drop_tokens):
+    """Create TF-IDF vector representation of document
+
+    Parameters
+    ----------
+    freqs: dict
+        Term frequencies of document
+    inv_doc_freqs: dict
+        Inverse document frequencies of tokens
+    drop_tokens: list
+        Tokens to not consider
+
+    Returns
+    -------
+    tf_idf: numpy.array
+        TF-IDF Representation of document
+    """
+    len = sum(freqs.values())
+    tf_idf = {
+            k: freqs[k] * 1./len * v if freqs.get(k, -1) != -1 else 0.0
+            for k, v in inv_doc_freqs.items() if k not in drop_tokens}
+    tf_idf = np.array(list(tf_idf.values()))
+    return tf_idf
+
+
 def main():
 
     parser = argparse.ArgumentParser()
@@ -263,12 +301,24 @@ def main():
                         help="Path to load dicts.")
     parser.add_argument("-o", "--output_path",
                         help="Path to save generated BM25 scores.")
+    parser.add_argument("-k1", "--k1_value", type=float, default=1.5,
+                        help="k1 value for computing BM25 scores")
+    parser.add_argument("-b", "--b_value", type=float, default=0.5,
+                        help="b value for computing BM25 scores")
+    parser.add_argument("-t", "--threshold", type=float, default=0.80,
+                        help="Threshold for tokens to drop")
+    parser.add_argument("-l", "--log_path", type=str, default=None,
+                        help="Path to save generated logs")
     args = parser.parse_args()
 
-    timestr = time.strftime("%Y%m%d%H%M%S")
-    set_logger(os.path.join(args.output_path, f"bm25_{timestr}.log"))
+    if args.log_path is None:
+        args.log_path = args.output_path
 
-    # Loading dictionary containing the 'train', 'test' and 'val' splits
+    set_logger(os.path.join(args.log_path, "bm25"))
+    for name, value in vars(args).items():
+        logging.info(f"{name}: {value}")
+
+    # Loading dictionary containing the train and test splits
 
     # of the high count advocates
     with open(args.dict_path, 'r') as f:
@@ -290,14 +340,11 @@ def main():
         logging.info(f"Creating meta-document for {adv}")
 
         # Creating the training corpus
-        adv_concat[adv], docs = create_concat_text([*cases["db"],
-                                                    *cases["train"]],
+        adv_concat[adv], docs = create_concat_text(cases["train"],
                                                    args.file_path)
         train_texts = {**train_texts, **docs}
 
         test_doc_ids.update(cases["test"])
-        test_doc_ids.update(cases["val"])
-        #  test_doc_ids.update(map(lambda x: x, cases["train"]))
 
     # Getting number of documents in the corpus_freqs
     corpus_size = len([*adv_concat])
@@ -311,13 +358,10 @@ def main():
     corpus_freqs = convert_to_token_dict(dictionary, dictionary.cfs)
     doc_freqs = convert_to_token_dict(dictionary, dictionary.dfs)
 
-    # Percentage threshold for tokens to not consider in the BM25 scoring
-    threshold = 0.70
-
     # Getting the list of tokens to not consider
-    #  drop_tokens = set(
-        #  [token for token, freq in doc_freqs.items()
-         #  if ((freq >= threshold * corpus_size) or (freq <= 5))])
+    drop_tokens = set(
+        [token for token, freq in doc_freqs.items()
+         if (freq >= args.threshold * corpus_size)])
 
     drop_tokens = []
 
@@ -372,10 +416,16 @@ def main():
         logging.info(f"Computing BM25 scores for {idx}")
         with open(os.path.join(args.file_path, f"{idx}.txt"), 'r') as f:
             test_text = f.read()
-        if (test_text == ''):
-            continue
-        #  test_texts[idx] = process(test_text)
-        test_texts[idx] = test_text.split()
+        test_texts[idx] = process(test_text)
+        # Error for empty test document
+        try:
+            if (test_texts[idx] == ''):
+                raise ValueError((f"Found empty test document {idx}."
+                                  "Documents cannot be empty"))
+        except ValueError as e:
+            logging.error(repr(e))
+            sys.exit(1)
+        #  test_texts[idx] = test_text.split()
 
     test_doc_freqs = get_doc_freqs(
         test_texts, dictionary, drop_tokens)
@@ -390,19 +440,52 @@ def main():
     train_doc_freqs = get_doc_freqs(
         train_texts, dictionary, drop_tokens)
 
-    write_to_dir(doc_freqs, args.output_path, "doc_freqs")
-    write_to_dir(corpus_freqs, args.output_path, "corpus_freqs")
-    write_to_dir(inv_doc_freqs, args.output_path, "inv_doc_freqs")
-    write_to_dir(per_doc_freqs, args.output_path, "per_doc_freqs")
-    write_to_dir(per_doc_lens, args.output_path, "per_doc_lens")
-    write_to_dir(unique_doc_lens, args.output_path, "unique_doc_lens")
-    write_to_dir(scores, args.output_path, "scores")
-    write_to_dir(test_doc_freqs, args.output_path, "test_doc_freqs")
-    write_to_dir(train_doc_freqs, args.output_path, "train_doc_freqs")
-    write_to_dir(drop_tokens, args.output_path, "drop_tokens",
+    if not os.path.exists(os.path.join(args.output_path, "embeddings",
+                                       "adv_rep")):
+        os.makedirs(os.path.join(args.output_path, "embeddings", "adv_rep"))
+        os.makedirs(os.path.join(args.output_path, "embeddings", "train_rep"))
+        os.makedirs(os.path.join(args.output_path, "embeddings", "test_rep"))
+
+    # Getting tf-idf vectors
+    logging.info("Getting TF-IDF vectors of advocates")
+    for adv, freqs in per_doc_freqs.items():
+        rep = get_tf_idf_vector(freqs, inv_doc_freqs,
+                                drop_tokens)
+        with open(os.path.join(args.output_path, "embeddings", "adv_rep",
+                               f"{adv}.npy"), 'wb') as f:
+            np.save(f, rep)
+
+    logging.info("Getting TF-IDF vectors of training documents")
+    for doc, freqs in train_doc_freqs.items():
+        rep = get_tf_idf_vector(freqs, inv_doc_freqs,
+                                drop_tokens)
+        with open(os.path.join(args.output_path, "embeddings", "train_rep",
+                               f"{doc}.npy"), 'wb') as f:
+            np.save(f, rep)
+
+    logging.info("Getting TF-IDF vectors of test documents")
+    for doc, freqs in test_doc_freqs.items():
+        rep = get_tf_idf_vector(freqs, inv_doc_freqs,
+                                drop_tokens)
+        with open(os.path.join(args.output_path, "embeddings", "test_rep",
+                               f"{doc}.npy"), 'wb') as f:
+            np.save(f, rep)
+
+    write_to_dir(doc_freqs, [args.output_path, "model"], "doc_freqs")
+    write_to_dir(corpus_freqs, [args.output_path, "model"], "corpus_freqs")
+    write_to_dir(inv_doc_freqs, [args.output_path, "model"], "inv_doc_freqs")
+    write_to_dir(per_doc_freqs, [args.output_path, "model"], "per_doc_freqs")
+    write_to_dir(per_doc_lens, [args.output_path, "model"], "per_doc_lens")
+    write_to_dir(unique_doc_lens, [args.output_path, "model"],
+                 "unique_doc_lens")
+    write_to_dir(test_doc_freqs, [args.output_path, "model"], "test_doc_freqs")
+    write_to_dir(train_doc_freqs, [args.output_path, "model"],
+                 "train_doc_freqs")
+    write_to_dir(drop_tokens, [args.output_path, "model"], "drop_tokens",
                  "txt")
+    write_to_dir(scores, [args.output_path, "results"], "scores")
     dictionary.save(os.path.join(
-        args.output_path, "dictionary"))
+        args.output_path, "model", "dictionary"))
 
 
 if __name__ == "__main__":

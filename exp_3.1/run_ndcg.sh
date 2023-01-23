@@ -25,8 +25,8 @@ do
         --advocate_charges /home/workboots/Datasets/DHC/variations/var_3/targets/adv_ipc_charges_new.json \
         --relevant_advocates /home/workboots/Datasets/DHC/common/selected_advs.json \
         --strategy 'equal' \
-        --scores /home/workboots/Results/advocate_recommendation/exp_3.1/cross_val/20_fold/fold_$fold/similarity_reranking.json \
-        --output_path /home/workboots/Results/advocate_recommendation/exp_3.1/cross_val/20_fold/fold_$fold/ndcg_harder/ \
+        --scores /home/workboots/Results/advocate_recommendation/exp_3/cross_val/20_fold/fold_$fold/scores.json \
+        --output_path /home/workboots/Results/advocate_recommendation/exp_3/cross_val/20_fold/fold_$fold/ndcg_harder/ \
         # --threshold 1.0
 done
 
