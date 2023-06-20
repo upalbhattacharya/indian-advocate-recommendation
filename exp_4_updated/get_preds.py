@@ -3,7 +3,7 @@
 # Birth: 2022-10-25 11:22:37.744100343 +0530
 # Modify: 2022-10-25 12:07:18.847364600 +0530
 
-"""Evaluation script for BertMultiLabel"""
+"""Getting predictions from trained BertMultiLabel model"""
 
 import argparse
 import logging
@@ -11,8 +11,6 @@ import os
 
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import utils
 from data_generator import BertMultiLabelDataset
 from metrics import metrics
@@ -20,7 +18,7 @@ from model.net import BertMultiLabel
 from torch.utils.data import DataLoader
 
 
-def evaluate(model, loss_fn, data_loader, params, metrics, args, target_names):
+def get_preds(model, data_loader, params, metrics, args, target_names):
     if args.restore_file is not None:
         # Loading trained model
         logging.info(f"Found checkpoint at {args.restore_file}. Loading.")
@@ -29,61 +27,27 @@ def evaluate(model, loss_fn, data_loader, params, metrics, args, target_names):
 
     # Set model to eval mode
     model.eval()
-    m = nn.Sigmoid()
 
-    # Accumulate data of batches
-    accumulate = utils.Accumulate()
-    loss_batch = []
     preds = {}
-    activations = {}
 
-    criterion = loss_fn
-
-    for data, target, idx in iter(data_loader):
-        target = target.to(args.device)
+    for idx, data in iter(data_loader):
         data = list(data)
         y_pred = model(data)
 
-        loss = criterion(y_pred.float(), target.float())
-
-        outputs_batch = (
-            m(y_pred).data.cpu().numpy() > params.threshold
-        ).astype(np.int32)
-        targets_batch = (target.data.cpu().numpy()).astype(np.int32)
-
-        accumulate.update(outputs_batch, targets_batch)
-        loss_batch.append(loss.item())
-
-        pred_idx = [
-            [i for i, val in enumerate(pred) if val != 0.0]
-            for pred in outputs_batch
-        ]
-        pred_names = [[target_names[j] for j in pred] for pred in pred_idx]
-        for i, pred in zip(idx, pred_names):
-            preds[i] = pred
-
-        for i, acts in zip(idx, y_pred):
-            activations[i] = [acts[j] for j, _ in enumerate(target_names)]
+        outputs_batch = (y_pred.data.cpu().numpy() > params.threshold).astype(
+            np.int32
+        )
+        outputs_batch = outputs_batch[0]
+        pred_idx = [i for i, val in enumerate(outputs_batch) if val != 0.0]
+        pred = [target_names[j] for j in pred_idx]
+        idx = idx[0]
+        preds[idx] = pred
 
         del data
-        del target
         del y_pred
         del outputs_batch
-        del targets_batch
-        del pred
 
-    output, targets = accumulate()
-
-    summary_batch = {
-        metric: metrics[metric](output, targets, target_names)
-        for metric in metrics
-    }
-    summary_batch["preds"] = preds
-    summary_batch["activations"] = activations
-
-    summary_batch["loss_avg"] = sum(loss_batch) * 1.0 / len(loss_batch)
-
-    return summary_batch
+    return preds
 
 
 def main():
@@ -184,6 +148,7 @@ def main():
         data_paths=args.data_paths,
         targets_paths=args.targets_paths,
         unique_labels=args.unique_labels,
+        mode="eval",
     )
 
     logging.info(f"[DATASET] Using {len(test_dataset.unique_labels)} targets")
@@ -205,13 +170,8 @@ def main():
 
     model.to(args.device)
 
-    # Defining optimizer and loss function
-    optimizer = optim.Adam(model.parameters(), lr=params.lr)
-    loss_fn = nn.BCEWithLogitsLoss(reduction="sum")
-
-    test_stats = evaluate(
+    test_stats = get_preds(
         model,
-        loss_fn,
         test_loader,
         params,
         metrics,
@@ -220,7 +180,7 @@ def main():
     )
 
     json_path = os.path.join(
-        args.exp_dir, "metrics", f"{args.name}", "test", "test_stats.json"
+        args.exp_dir, "metrics", f"{args.name}", "test", "preds.json"
     )
     utils.save_dict_to_json(test_stats, json_path)
 
