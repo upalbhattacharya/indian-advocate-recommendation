@@ -38,6 +38,7 @@ aniket_classification.py
 **/experiments/metrics/*
 **/node_modules/*
 **/__pycache__*
+**/.ipynb_checkpoints/*
 
 # notebooks
 */notebooks*

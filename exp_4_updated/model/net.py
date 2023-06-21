@@ -60,13 +60,16 @@ class BertMultiLabel(nn.Module):
         )
 
     def process(self, x):
-        tokenized = self.tokenizer(
-            x,
-            truncation=True,
-            padding="longest",
-            max_length=self.max_length,
-            return_tensors="pt",
-        )
+        if self.max_length == -1:
+            tokenized = self.tokenizer(x, return_tensors="pt")
+        else:
+            tokenized = self.tokenizer(
+                x,
+                truncation=True,
+                padding="longest",
+                max_length=self.max_length,
+                return_tensors="pt",
+            )
         return tokenized
 
     def forward(self, x):

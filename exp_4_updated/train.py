@@ -12,6 +12,7 @@ from collections import Counter
 from itertools import chain
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -140,10 +141,14 @@ def train_and_evaluate(
         val_stats = evaluate(
             model, loss_fn, val_loader, params, metrics, args, target_names
         )
+        val_acts = val_stats["activations"]
+        del val_stats["activations"]
 
         train_stats = evaluate(
             model, loss_fn, train_loader, params, metrics, args, target_names
         )
+        train_acts = train_stats["activations"]
+        del train_stats["activations"]
 
         # Getting f1 val_stats
 
@@ -172,6 +177,15 @@ def train_and_evaluate(
         )
         utils.save_dict_to_json(train_stats, train_json_path)
 
+        train_acts_path = os.path.join(
+            exp_dir,
+            "activations",
+            f"{name}",
+            "train",
+            f"epoch_{epoch + 1}_train_activations.pkl",
+        )
+        utils.save_df_to_pkl(train_acts, train_acts_path)
+
         val_json_path = os.path.join(
             exp_dir,
             "metrics",
@@ -180,6 +194,15 @@ def train_and_evaluate(
             f"epoch_{epoch + 1}_val_stats.json",
         )
         utils.save_dict_to_json(val_stats, val_json_path)
+
+        val_acts_path = os.path.join(
+            exp_dir,
+            "activations",
+            f"{name}",
+            "val",
+            f"epoch_{epoch + 1}_val_activations.pkl",
+        )
+        utils.save_df_to_pkl(val_acts, val_acts_path)
 
         # Saving best stats
         if is_train_best:
@@ -191,6 +214,15 @@ def train_and_evaluate(
             )
             utils.save_dict_to_json(train_stats, best_json_path)
 
+            best_acts_path = os.path.join(
+                exp_dir,
+                "activations",
+                f"{name}",
+                "train",
+                "best_train_activations.pkl",
+            )
+            utils.save_df_to_pkl(train_acts, best_acts_path)
+
         if is_val_best:
             best_val_macro_f1 = val_macro_f1
             val_stats["epoch"] = epoch + 1
@@ -199,6 +231,15 @@ def train_and_evaluate(
                 exp_dir, "metrics", f"{name}", "val", "best_val_stats.json"
             )
             utils.save_dict_to_json(val_stats, best_json_path)
+
+            best_acts_path = os.path.join(
+                exp_dir,
+                "activations",
+                f"{name}",
+                "val",
+                "best_val_activations.pkl",
+            )
+            utils.save_df_to_pkl(val_acts, best_acts_path)
 
             logging.info(
                 (

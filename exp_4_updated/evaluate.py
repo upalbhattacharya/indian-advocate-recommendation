@@ -10,6 +10,7 @@ import logging
 import os
 
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -62,8 +63,10 @@ def evaluate(model, loss_fn, data_loader, params, metrics, args, target_names):
         for i, pred in zip(idx, pred_names):
             preds[i] = pred
 
-        for i, acts in zip(idx, y_pred):
-            activations[i] = [acts[j] for j, _ in enumerate(target_names)]
+        for i, acts in zip(idx, m(y_pred).data.cpu().numpy()):
+            activations[i] = {
+                target: acts[j] for j, target in enumerate(target_names)
+            }
 
         del data
         del target
@@ -79,7 +82,9 @@ def evaluate(model, loss_fn, data_loader, params, metrics, args, target_names):
         for metric in metrics
     }
     summary_batch["preds"] = preds
-    summary_batch["activations"] = activations
+    summary_batch["activations"] = pd.DataFrame.from_dict(
+        activations, orient="index"
+    )
 
     summary_batch["loss_avg"] = sum(loss_batch) * 1.0 / len(loss_batch)
 
@@ -218,11 +223,22 @@ def main():
         args,
         test_dataset.unique_labels,
     )
+    test_acts = test_stats["activations"]
+    del test_stats["activations"]
 
     json_path = os.path.join(
         args.exp_dir, "metrics", f"{args.name}", "test", "test_stats.json"
     )
     utils.save_dict_to_json(test_stats, json_path)
+
+    acts_path = os.path.join(
+        args.exp_dir,
+        "activations",
+        f"{args.name}",
+        "test",
+        "test_activations.pkl",
+    )
+    utils.save_df_to_pkl(test_acts, acts_path)
 
     logging.info("=" * 80)
 

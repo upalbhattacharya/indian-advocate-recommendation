@@ -37,7 +37,8 @@ class BertMultiLabelDataset(Dataset):
         self.idx = {i: k for i, k in enumerate(self.text_paths)}
 
     def __len__(self):
-        return len(self.text_paths.keys())
+        # return len(self.text_paths.keys())
+        return 25
 
     def __getitem__(self, idx):
         data = self.load_data(self.text_paths[self.idx[idx]])

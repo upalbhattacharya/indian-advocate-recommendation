@@ -7,7 +7,7 @@
 # New Facts, DHC and SC
 python train.py -d /home/workboots/Datasets/DHC/variations/v5/data \
     -t /home/workboots/Datasets/DHC/variations/v5/targets/case_gold_silver_advs_chapter_overlap.json \
-    -n inlegalbert_gold_silver_advs_chapter_overlap_r1 \
-    -p params_inlegalbert.json \
-    -lm "law-ai/InLegalBERT" \
+    -n longformer_gold_silver_advs_chapter_overlap_r1 \
+    -p params_longformer.json \
+    -lm "allenai/longformer-base-4096" \
     -id 0
