@@ -340,7 +340,7 @@ def main():
     args = parser.parse_args()
 
     # Setting logger
-    utils.set_logger(os.path.join(args.exp_dir, f"{args.name}"))
+    utils.set_logger(os.path.join(args.exp_dir, "logs", f"{args.name}"))
 
     # Selecting correct device to train and evaluate on
     if not torch.cuda.is_available() and args.device == "cuda":

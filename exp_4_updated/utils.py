@@ -106,6 +106,9 @@ def save_checkpoint(state, is_best, save_path, to_save=False):
 
 
 def set_logger(log_path: str):
+    if not (os.path.exists(os.path.split(log_path)[0])):
+        os.makedirs(os.path.split(log_path)[0])
+
     timestamp = strftime("%Y-%m-%d-%H-%M-%S")
     log_path = log_path + "_" + timestamp + ".log"
 
