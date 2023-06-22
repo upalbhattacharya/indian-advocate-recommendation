@@ -5,9 +5,9 @@
 # name given to each model
 
 # New Facts, DHC and SC
-python train.py -d /DATA1/upal/Datasets/LLPE/variations/v1/data/ \
-    -t /DATA1/upal/Datasets/LLPE/variations/v1/targets/case_statute_targets.json \
-    -n legalbert_r1 \
+python train.py -d /DATA/upal/Datasets/DHC/variations/new/v5/data \
+    -t /DATA/upal/Datasets/DHC/variations/new/v5/targets/case_gold_silver_advs_chapter_overlap.json \
+    -n legalbert_gold_silver_advs_chapter_overlap_r1 \
     -p params_legalbert.json \
     -lm "nlpaueb/legal-bert-base-uncased" \
     -id 1

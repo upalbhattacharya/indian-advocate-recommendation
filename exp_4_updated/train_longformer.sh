@@ -5,9 +5,9 @@
 # name given to each model
 
 # New Facts, DHC and SC
-python train.py -d /home/workboots/Datasets/DHC/variations/v5/data \
-    -t /home/workboots/Datasets/DHC/variations/v5/targets/case_gold_silver_advs_chapter_overlap.json \
+python train.py -d /DATA/upal/Datasets/DHC/variations/new/v5/data \
+    -t /DATA/upal/Datasets/DHC/variations/new/v5/targets/case_gold_silver_advs_chapter_overlap.json \
     -n longformer_gold_silver_advs_chapter_overlap_r1 \
     -p params_longformer.json \
     -lm "allenai/longformer-base-4096" \
-    -id 0
+    -id 1

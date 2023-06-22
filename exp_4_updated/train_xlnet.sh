@@ -5,9 +5,9 @@
 # name given to each model
 
 # New Facts, DHC and SC
-python train.py -d /DATA1/upal/Datasets/LLPE/variations/v1/data/ \
-    -t /DATA1/upal/Datasets/LLPE/variations/v1/targets/case_statute_targets.json \
-    -n xlnet_r1 \
+python train.py -d /DATA/upal/Datasets/DHC/variations/new/v5/data \
+    -t /DATA/upal/Datasets/DHC/variations/new/v5/targets/case_gold_silver_advs_chapter_overlap.json \
+    -n xlnet_gold_silver_advs_chapter_overlap_r1 \
     -p params_xlnet.json \
     -lm "xlnet-base-cased" \
-    -id 0
+    -id 1
