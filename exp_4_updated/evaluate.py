@@ -44,11 +44,12 @@ def evaluate(model, loss_fn, data_loader, params, metrics, args, target_names):
         target = target.to(args.device)
         data = list(data)
         y_pred = model(data)
+        y_pred_acts = m(y_pred.data.cpu())
 
         loss = criterion(y_pred.float(), target.float())
 
         outputs_batch = (
-            m(y_pred).data.cpu().numpy() > params.threshold
+            y_pred_acts.numpy() > params.threshold
         ).astype(np.int32)
         targets_batch = (target.data.cpu().numpy()).astype(np.int32)
 
@@ -63,7 +64,7 @@ def evaluate(model, loss_fn, data_loader, params, metrics, args, target_names):
         for i, pred in zip(idx, pred_names):
             preds[i] = pred
 
-        for i, acts in zip(idx, m(y_pred).data.cpu().numpy()):
+        for i, acts in zip(idx, y_pred_acts.numpy()):
             activations[i] = {
                 target: acts[j] for j, target in enumerate(target_names)
             }
@@ -71,6 +72,7 @@ def evaluate(model, loss_fn, data_loader, params, metrics, args, target_names):
         del data
         del target
         del y_pred
+        del y_pred_acts
         del outputs_batch
         del targets_batch
         del pred
