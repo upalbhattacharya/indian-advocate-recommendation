@@ -98,6 +98,7 @@ def train_and_evaluate(
     optimizer,
     loss_fn,
     train_loader,
+    train_check_loader,
     val_loader,
     params,
     metrics,
@@ -145,7 +146,13 @@ def train_and_evaluate(
         del val_stats["activations"]
 
         train_stats = evaluate(
-            model, loss_fn, train_loader, params, metrics, args, target_names
+            model,
+            loss_fn,
+            train_check_loader,
+            params,
+            metrics,
+            args,
+            target_names,
         )
         train_acts = train_stats["activations"]
         del train_stats["activations"]
@@ -393,9 +400,11 @@ def main():
         train_dataset, batch_size=params.batch_size, shuffle=True
     )
 
+    train_check_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+
     val_loader = DataLoader(
         val_dataset,
-        batch_size=params.batch_size,
+        batch_size=1,
         shuffle=True,
     )
 
@@ -441,6 +450,7 @@ def main():
         optimizer,
         loss_fn,
         train_loader,
+        train_check_loader,
         val_loader,
         params,
         metrics,

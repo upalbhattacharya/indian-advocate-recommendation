@@ -44,14 +44,14 @@ def evaluate(model, loss_fn, data_loader, params, metrics, args, target_names):
         target = target.to(args.device)
         data = list(data)
         y_pred = model(data)
-        y_pred_acts = m(y_pred.data.cpu())
+        y_pred_acts = m(y_pred.detach().data.cpu())
 
         loss = criterion(y_pred.float(), target.float())
 
         outputs_batch = (
             y_pred_acts.numpy() > params.threshold
         ).astype(np.int32)
-        targets_batch = (target.data.cpu().numpy()).astype(np.int32)
+        targets_batch = (target.detach().data.cpu().numpy()).astype(np.int32)
 
         accumulate.update(outputs_batch, targets_batch)
         loss_batch.append(loss.item())
