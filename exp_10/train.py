@@ -6,20 +6,20 @@
 import argparse
 import logging
 import os
+from itertools import Counter, chain
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import tqdm
-from torch.utils.data import DataLoader
-
 import utils
 from data_generator import MultiTaskDataset
 from evaluate import evaluate
 from metrics import metrics
 from model.multi_task_loss import MultiTaskLoss
 from model.net import SimpleMultiTaskMultiLabelPrediction
+from torch.utils.data import DataLoader
 
 __author__ = "Upal Bhattacharya"
 __license__ = ""
@@ -28,10 +28,19 @@ __email__ = "upal.bhattacharya@gmail.com"
 __version__ = "1.0"
 
 
-def train_one_epoch(model, optimizer, criterion, multiTaskLoss,
-                    data_loader, params, metrics, target_names, args):
-
+def train_one_epoch(
+    model,
+    optimizer,
+    criterion,
+    multiTaskLoss,
+    data_loader,
+    params,
+    metrics,
+    target_names,
+    args,
+):
     model.train()
+    m = nn.Sigmoid()
 
     loss_batch = []
     loss_batch_adv = []
@@ -44,7 +53,7 @@ def train_one_epoch(model, optimizer, criterion, multiTaskLoss,
     data_loader = iter(data_loader)
 
     for i in tqdm.tqdm(range(num_batches), mininterval=10, desc="Training"):
-        data, target_adv, target_area = next(data_loader)
+        data, target_adv, target_area, _ = next(data_loader)
         data = list(data)
 
         target_adv = target_adv.to(args.device)
@@ -73,8 +82,9 @@ def train_one_epoch(model, optimizer, criterion, multiTaskLoss,
             target_area_mod = target_area_mod.to(args.device)
 
         loss_adv = criterion["adv"](y_pred_adv.float(), target_adv.float())
-        loss_area = criterion["area"](y_pred_area_mod.float(),
-                                      target_area_mod.float())
+        loss_area = criterion["area"](
+            y_pred_area_mod.float(), target_area_mod.float()
+        )
         losses = torch.stack((loss_adv, loss_area))
         multi_task_loss = multiTaskLoss(losses)
         multi_task_loss.backward()
@@ -88,20 +98,22 @@ def train_one_epoch(model, optimizer, criterion, multiTaskLoss,
             loss_batch_area.append(loss_area.item())
 
         outputs_batch_adv = (
-                y_pred_adv.data.cpu().detach().numpy()
-                > params.threshold).astype(np.int32)
+            m(y_pred_adv).detach().data.cpu().numpy() > params.threshold
+        ).astype(np.int32)
 
-        targets_batch_adv = (
-                target_adv.data.cpu().detach().numpy()).astype(np.int32)
+        targets_batch_adv = (target_adv.data.cpu().detach().numpy()).astype(
+            np.int32
+        )
 
         accumulate_adv.update(outputs_batch_adv, targets_batch_adv)
 
         outputs_batch_area = (
-                y_pred_area.data.cpu().detach().numpy()
-                > params.threshold).astype(np.int32)
+            m(y_pred_area).detach().data.cpu().numpy() > params.threshold
+        ).astype(np.int32)
 
-        targets_batch_area = (
-                target_area.data.cpu().detach().numpy()).astype(np.int32)
+        targets_batch_area = (target_area.data.cpu().detach().numpy()).astype(
+            np.int32
+        )
 
         accumulate_area.update(outputs_batch_area, targets_batch_area)
 
@@ -132,29 +144,40 @@ def train_one_epoch(model, optimizer, criterion, multiTaskLoss,
     outputs_area, targets_area = accumulate_area()
 
     summary_batch = {
-            "adv": {
-                metric: metrics[metric](
-                        outputs_adv,
-                        targets_adv,
-                        target_names["adv"])
-                for metric in metrics},
-            "area": {
-                metric: metrics[metric](
-                        outputs_area,
-                        targets_area,
-                        target_names["area"])
-                for metric in metrics},
-
-            }
-    summary_batch["loss_avg"] = sum(loss_batch) * 1./len(loss_batch)
-    summary_batch["loss_adv"] = sum(loss_batch_adv) * 1./len(loss_batch_adv)
-    summary_batch["loss_area"] = sum(loss_batch_area) * 1./len(loss_batch_area)
+        "adv": {
+            metric: metrics[metric](
+                outputs_adv, targets_adv, target_names["adv"]
+            )
+            for metric in metrics
+        },
+        "area": {
+            metric: metrics[metric](
+                outputs_area, targets_area, target_names["area"]
+            )
+            for metric in metrics
+        },
+    }
+    summary_batch["loss_avg"] = sum(loss_batch) * 1.0 / len(loss_batch)
+    summary_batch["loss_adv"] = sum(loss_batch_adv) * 1.0 / len(loss_batch_adv)
+    summary_batch["loss_area"] = (
+        sum(loss_batch_area) * 1.0 / len(loss_batch_area)
+    )
     return summary_batch
 
 
-def train_and_evaluate(model, optimizer, criterion, multiTaskLoss,
-                       train_loader, val_loader, params, metrics,
-                       target_names, args):
+def train_and_evaluate(
+    model,
+    optimizer,
+    criterion,
+    multiTaskLoss,
+    train_loader,
+    train_check_loader,
+    val_loader,
+    params,
+    metrics,
+    target_names,
+    args,
+):
     start_epoch = 0
     best_train_macro_f1 = 0.0
     best_val_macro_f1 = 0.0
@@ -170,144 +193,322 @@ def train_and_evaluate(model, optimizer, criterion, multiTaskLoss,
         logging.info(f"Logging for epoch {epoch}.")
 
         _ = train_one_epoch(
-                model, optimizer, criterion, multiTaskLoss,
-                train_loader, params, metrics, target_names, args)
+            model,
+            optimizer,
+            criterion,
+            multiTaskLoss,
+            train_loader,
+            params,
+            metrics,
+            target_names,
+            args,
+        )
 
         val_stats = evaluate(
-                model, criterion, multiTaskLoss,
-                val_loader, params, metrics, target_names, args)
+            model,
+            criterion,
+            multiTaskLoss,
+            val_loader,
+            params,
+            metrics,
+            target_names,
+            args,
+        )
+
+        val_adv_acts = val_stats["adv"]["activations"]
+        del val_stats["adv"]["activations"]
+
+        val_area_acts = val_stats["area"]["activations"]
+        del val_stats["area"]["activations"]
 
         train_stats = evaluate(
-                model, criterion, multiTaskLoss,
-                train_loader, params, metrics, target_names, args)
+            model,
+            criterion,
+            multiTaskLoss,
+            train_check_loader,
+            params,
+            metrics,
+            target_names,
+            args,
+        )
 
-        train_macro_f1_adv = train_stats["adv"]['prec_rec_f1_sup']['macro_f1']
-        val_macro_f1_adv = val_stats["adv"]['prec_rec_f1_sup']['macro_f1']
+        train_adv_acts = train_stats["adv"]["activations"]
+        del train_stats["adv"]["activations"]
 
-        train_macro_f1_area = train_stats[
-                "area"]['prec_rec_f1_sup']['macro_f1']
-        val_macro_f1_area = val_stats["area"]['prec_rec_f1_sup']['macro_f1']
+        train_area_acts = train_stats["area"]["activations"]
+        del train_stats["area"]["activations"]
+
+        train_macro_f1_adv = train_stats["adv"]["prec_rec_f1_sup"]["macro_f1"]
+        val_macro_f1_adv = val_stats["adv"]["prec_rec_f1_sup"]["macro_f1"]
+
+        train_macro_f1_area = train_stats["area"]["prec_rec_f1_sup"][
+            "macro_f1"
+        ]
+        val_macro_f1_area = val_stats["area"]["prec_rec_f1_sup"]["macro_f1"]
 
         is_train_best = train_macro_f1_adv >= best_train_macro_f1
         is_val_best = val_macro_f1_adv >= best_val_macro_f1
 
         logging.info(
-                (f"Performance for epoch {epoch}:\n"
-                 "=====Adv====\n"
-                 "============\n"
-                 f"val macro F1: {val_macro_f1_adv:0.5f}\n"
-                 f"train macro F1: {train_macro_f1_adv:0.5f}\n"
-                 f"Avg val loss: {val_stats['loss_adv']:0.5f}\n"
-                 f"Avg train loss: {train_stats['loss_adv']:0.5f}\n"
-                 "====Area====\n"
-                 "============\n"
-                 f"val macro F1: {val_macro_f1_area:0.5f}\n"
-                 f"train macro F1: {train_macro_f1_area:0.5f}\n"
-                 f"Avg val loss: {val_stats['loss_area']:0.5f}\n"
-                 f"Avg train loss: {train_stats['loss_area']:0.5f}\n"
-                 "===Overall==\n"
-                 "============\n"
-                 f"Avg val loss: {val_stats['loss_avg']:0.5f}\n"
-                 f"Avg train loss: {train_stats['loss_avg']:0.5f}\n"))
+            (
+                f"Performance for epoch {epoch}:\n"
+                "=====Adv====\n"
+                "============\n"
+                f"val macro F1: {val_macro_f1_adv:0.5f}\n"
+                f"train macro F1: {train_macro_f1_adv:0.5f}\n"
+                f"Avg val loss: {val_stats['loss_adv']:0.5f}\n"
+                f"Avg train loss: {train_stats['loss_adv']:0.5f}\n"
+                "====Area====\n"
+                "============\n"
+                f"val macro F1: {val_macro_f1_area:0.5f}\n"
+                f"train macro F1: {train_macro_f1_area:0.5f}\n"
+                f"Avg val loss: {val_stats['loss_area']:0.5f}\n"
+                f"Avg train loss: {train_stats['loss_area']:0.5f}\n"
+                "===Overall==\n"
+                "============\n"
+                f"Avg val loss: {val_stats['loss_avg']:0.5f}\n"
+                f"Avg train loss: {train_stats['loss_avg']:0.5f}\n"
+            )
+        )
 
         train_json_path = os.path.join(
-                    args.exp_dir, "metrics", f"{args.name}", "train",
-                    f"epoch_{epoch + 1}_train_f1.json")
+            args.exp_dir,
+            "metrics",
+            f"{args.name}",
+            "train",
+            f"epoch_{epoch + 1}_train_f1.json",
+        )
         utils.save_dict_to_json(train_stats, train_json_path)
 
+        train_adv_acts_path = os.path.join(
+            args.exp_dir,
+            "activations",
+            f"{args.name}",
+            "train",
+            f"epoch_{epoch + 1}_train_adv_activations.pkl",
+        )
+        utils.save_df_to_pkl(train_adv_acts, train_adv_acts_path)
+
+        train_area_acts_path = os.path.join(
+            args.exp_dir,
+            "activations",
+            f"{args.name}",
+            "train",
+            f"epoch_{epoch + 1}_train_area_activations.pkl",
+        )
+        utils.save_df_to_pkl(train_area_acts, train_area_acts_path)
+
         val_json_path = os.path.join(
-                    args.exp_dir, "metrics", f"{args.name}", "val",
-                    f"epoch_{epoch + 1}_val_f1.json")
+            args.exp_dir,
+            "metrics",
+            f"{args.name}",
+            "val",
+            f"epoch_{epoch + 1}_val_f1.json",
+        )
         utils.save_dict_to_json(val_stats, val_json_path)
+
+        val_adv_acts_path = os.path.join(
+            args.exp_dir,
+            "activations",
+            f"{args.name}",
+            "val",
+            f"epoch_{epoch + 1}_val_adv_activations.pkl",
+        )
+        utils.save_df_to_pkl(val_adv_acts, val_adv_acts_path)
+
+        val_area_acts_path = os.path.join(
+            args.exp_dir,
+            "activations",
+            f"{args.name}",
+            "val",
+            f"epoch_{epoch + 1}_val_area_activations.pkl",
+        )
+        utils.save_df_to_pkl(val_area_acts, val_area_acts_path)
 
         if is_train_best:
             best_train_macro_f1 = train_macro_f1_adv
             train_stats["epoch"] = epoch + 1
 
             train_json_path = os.path.join(
-                        args.exp_dir, "metrics", f"{args.name}", "train",
-                        "best_train_f1.json")
+                args.exp_dir,
+                "metrics",
+                f"{args.name}",
+                "train",
+                "best_train_f1.json",
+            )
             utils.save_dict_to_json(train_stats, train_json_path)
+
+            best_adv_acts_path = os.path.join(
+                args.exp_dir,
+                "activations",
+                f"{args.name}",
+                "train",
+                "best_train_adv_activations.pkl",
+            )
+            utils.save_df_to_pkl(train_adv_acts, best_adv_acts_path)
+
+            best_area_acts_path = os.path.join(
+                args.exp_dir,
+                "activations",
+                f"{args.name}",
+                "train",
+                "best_train_area_activations.pkl",
+            )
+            utils.save_df_to_pkl(train_area_acts, best_area_acts_path)
 
         if is_val_best:
             best_val_macro_f1 = val_macro_f1_adv
             val_stats["epoch"] = epoch + 1
 
             val_json_path = os.path.join(
-                        args.exp_dir, "metrics", f"{args.name}", "val",
-                        "best_val_f1.json")
+                args.exp_dir,
+                "metrics",
+                f"{args.name}",
+                "val",
+                "best_val_f1.json",
+            )
             utils.save_dict_to_json(val_stats, val_json_path)
 
+            best_adv_acts_path = os.path.join(
+                args.exp_dir,
+                "activations",
+                f"{args.name}",
+                "val",
+                "best_val_adv_activations.pkl",
+            )
+            utils.save_df_to_pkl(val_adv_acts, best_adv_acts_path)
+
+            best_area_acts_path = os.path.join(
+                args.exp_dir,
+                "activations",
+                f"{args.name}",
+                "val",
+                "best_val_area_activations.pkl",
+            )
+            utils.save_df_to_pkl(val_area_acts, best_area_acts_path)
+
             logging.info(
-                    ("New best adv val macro F1 found\n"
-                     "=====Adv====\n"
-                     "============\n"
-                     f"val macro F1: {val_macro_f1_adv:0.5f}\n"
-                     f"train macro F1: {train_macro_f1_adv:0.5f}\n"
-                     f"Avg val loss: {val_stats['loss_adv']:0.5f}\n"
-                     f"Avg train loss: {train_stats['loss_adv']:0.5f}\n"
-                     "====Area====\n"
-                     "============\n"
-                     f"val macro F1: {val_macro_f1_area:0.5f}\n"
-                     f"train macro F1: {train_macro_f1_area:0.5f}\n"
-                     f"Avg val loss: {val_stats['loss_area']:0.5f}\n"
-                     f"Avg train loss: {train_stats['loss_area']:0.5f}\n"
-                     "===Overall==\n"
-                     "============\n"
-                     f"Avg val loss: {val_stats['loss_avg']:0.5f}\n"
-                     f"Avg train loss: {train_stats['loss_avg']:0.5f}\n"))
+                (
+                    "New best adv val macro F1 found\n"
+                    "=====Adv====\n"
+                    "============\n"
+                    f"val macro F1: {val_macro_f1_adv:0.5f}\n"
+                    f"train macro F1: {train_macro_f1_adv:0.5f}\n"
+                    f"Avg val loss: {val_stats['loss_adv']:0.5f}\n"
+                    f"Avg train loss: {train_stats['loss_adv']:0.5f}\n"
+                    "====Area====\n"
+                    "============\n"
+                    f"val macro F1: {val_macro_f1_area:0.5f}\n"
+                    f"train macro F1: {train_macro_f1_area:0.5f}\n"
+                    f"Avg val loss: {val_stats['loss_area']:0.5f}\n"
+                    f"Avg train loss: {train_stats['loss_area']:0.5f}\n"
+                    "===Overall==\n"
+                    "============\n"
+                    f"Avg val loss: {val_stats['loss_avg']:0.5f}\n"
+                    f"Avg train loss: {train_stats['loss_avg']:0.5f}\n"
+                )
+            )
 
             state = {
-                    "epoch": epoch + 1,
-                    "state_dict": model.state_dict(),
-                    "optim_dict": optimizer.state_dict()
-                    }
+                "epoch": epoch + 1,
+                "state_dict": model.state_dict(),
+                "optim_dict": optimizer.state_dict(),
+            }
 
-            utils.save_checkpoint(state, is_val_best,
-                                  os.path.join(args.exp_dir, "model_states",
-                                               f"{args.name}"),
-                                  (epoch + 1) % params.save_every == 0)
+            utils.save_checkpoint(
+                state,
+                is_val_best,
+                os.path.join(args.exp_dir, "model_states", f"{args.name}"),
+                (epoch + 1) % params.save_every == 0,
+            )
 
     # Save last epoch stats
-    utils.save_checkpoint(state, is_val_best,
-                          os.path.join(args.exp_dir, "model_states",
-                                       f"{args.name}"), True)
+    utils.save_checkpoint(
+        state,
+        is_val_best,
+        os.path.join(args.exp_dir, "model_states", f"{args.name}"),
+        True,
+    )
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--data_dirs", nargs="+", type=str,
-                        default=["data/"],
-                        help=("Directory containing training "
-                              "and validation cases."))
-    parser.add_argument("-tc", "--targets_paths_areas", nargs="+", type=str,
-                        default=["targets/targets.json"],
-                        help="Path to target files for areas.")
-    parser.add_argument("-ta", "--targets_paths_advs", nargs="+", type=str,
-                        default=["targets/targets.json"],
-                        help="Path to target files for advocates.")
-    parser.add_argument("-x", "--exp_dir", default="experiments/",
-                        help=("Directory to load parameters "
-                              " from and save metrics and model states"))
-    parser.add_argument("-n", "--name", type=str, required=True,
-                        help="Name of model")
-    parser.add_argument("-en", "--embed_model_name", type=str,
-                        default="bert-base-uncased",
-                        help="Name of pre-trained model to load")
-    parser.add_argument("-p", "--params", default="params.json",
-                        help="Name of params file to load from exp+_dir")
-    parser.add_argument("-de", "--device", type=str, default="cuda",
-                        help="Device to train on.")
-    parser.add_argument("-id", "--device_id", type=int, default=0,
-                        help="Device ID to run on if using GPU.")
-    parser.add_argument("-r", "--restore_file", default=None,
-                        help="Restore point to use.")
-    parser.add_argument("-ulc", "--unique_labels_areas", type=str,
-                        default=None,
-                        help="Labels to use as targets for areas.")
-    parser.add_argument("-ula", "--unique_labels_advs", type=str,
-                        default=None,
-                        help="Labels to use as targets for advocates.")
+    parser.add_argument(
+        "-d",
+        "--data_dirs",
+        nargs="+",
+        type=str,
+        default=["data/"],
+        help=("Directory containing training " "and validation cases."),
+    )
+    parser.add_argument(
+        "-tc",
+        "--targets_paths_areas",
+        nargs="+",
+        type=str,
+        default=["targets/targets.json"],
+        help="Path to target files for areas.",
+    )
+    parser.add_argument(
+        "-ta",
+        "--targets_paths_advs",
+        nargs="+",
+        type=str,
+        default=["targets/targets.json"],
+        help="Path to target files for advocates.",
+    )
+    parser.add_argument(
+        "-x",
+        "--exp_dir",
+        default="experiments/",
+        help=(
+            "Directory to load parameters "
+            " from and save metrics and model states"
+        ),
+    )
+    parser.add_argument(
+        "-n", "--name", type=str, required=True, help="Name of model"
+    )
+    parser.add_argument(
+        "-en",
+        "--embed_model_name",
+        type=str,
+        default="bert-base-uncased",
+        help="Name of pre-trained model to load",
+    )
+    parser.add_argument(
+        "-p",
+        "--params",
+        default="params.json",
+        help="Name of params file to load from exp+_dir",
+    )
+    parser.add_argument(
+        "-de", "--device", type=str, default="cuda", help="Device to train on."
+    )
+    parser.add_argument(
+        "-id",
+        "--device_id",
+        type=int,
+        default=0,
+        help="Device ID to run on if using GPU.",
+    )
+    parser.add_argument(
+        "-r", "--restore_file", default=None, help="Restore point to use."
+    )
+    parser.add_argument(
+        "-ulc",
+        "--unique_labels_areas",
+        type=str,
+        default=None,
+        help="Labels to use as targets for areas.",
+    )
+    parser.add_argument(
+        "-ula",
+        "--unique_labels_advs",
+        type=str,
+        default=None,
+        help="Labels to use as targets for advocates.",
+    )
 
     args = parser.parse_args()
 
@@ -345,76 +546,138 @@ def main():
         val_paths.append(os.path.join(path, "validation"))
 
     targets_paths = {
-            "adv": args.targets_paths_advs,
-            "area": args.targets_paths_areas
-            }
+        "adv": args.targets_paths_advs,
+        "area": args.targets_paths_areas,
+    }
 
     unique_labels = {
-            "adv": args.unique_labels_advs,
-            "area": args.unique_labels_areas
-            }
+        "adv": args.unique_labels_advs,
+        "area": args.unique_labels_areas,
+    }
 
     # Datasets
     train_dataset = MultiTaskDataset(
-                            data_paths=train_paths,
-                            targets_paths=targets_paths,
-                            unique_labels=unique_labels)
+        data_paths=train_paths,
+        targets_paths=targets_paths,
+        unique_labels=unique_labels,
+    )
 
     val_dataset = MultiTaskDataset(
-                            data_paths=val_paths,
-                            targets_paths=targets_paths,
-                            unique_labels=unique_labels)
+        data_paths=val_paths,
+        targets_paths=targets_paths,
+        unique_labels=unique_labels,
+    )
 
-    logging.info(("Training with "
-                  f"{len(train_dataset.unique_labels['adv'])} adv targets"))
-    logging.info(("Training with "
-                  f"{len(train_dataset.unique_labels['area'])} area targets"))
+    logging.info(
+        (
+            "Training with "
+            f"{len(train_dataset.unique_labels['adv'])} adv targets"
+        )
+    )
+    logging.info(
+        (
+            "Training with "
+            f"{len(train_dataset.unique_labels['area'])} area targets"
+        )
+    )
     logging.info(f"Training on {len(train_dataset)} datapoints")
 
     # Dataloaders
     train_loader = DataLoader(
-            train_dataset,
-            batch_size=params.batch_size,
-            shuffle=True)
+        train_dataset, batch_size=params.batch_size, shuffle=True
+    )
 
-    val_loader = DataLoader(
-            val_dataset,
-            batch_size=params.batch_size,
-            shuffle=True)
+    train_check_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+
+    val_loader = DataLoader(val_dataset, batch_size=1, shuffle=True)
 
     model = SimpleMultiTaskMultiLabelPrediction(
-                             labels=train_dataset.unique_labels,
-                             max_length=params.max_length,
-                             truncation_side=params.truncation_side,
-                             model_name=args.embed_model_name,
-                             mode="train",
-                             device=args.device
-                             )
+        labels=train_dataset.unique_labels,
+        max_length=params.max_length,
+        truncation_side=params.truncation_side,
+        model_name=args.embed_model_name,
+        mode="train",
+        device=args.device,
+    )
 
     model.to(args.device)
 
     is_regression = torch.Tensor([False, False])
-    multiTaskLoss = MultiTaskLoss(
-            is_regression=is_regression,
-            reduction='sum')
+    multiTaskLoss = MultiTaskLoss(is_regression=is_regression, reduction="sum")
     multiTaskLoss.to(args.device)
 
     # Defining optimizer and loss function
     parameters = list(model.parameters()) + list(multiTaskLoss.parameters())
 
     optimizer = optim.Adam(parameters, lr=params.lr)
-    loss_area = nn.BCELoss(reduction='sum')
-    loss_adv = nn.BCELoss(reduction='sum')
-    loss_fn = {
-            "area": loss_area,
-            "adv": loss_adv
-            }
 
-    train_and_evaluate(model, optimizer, loss_fn, multiTaskLoss, train_loader,
-                       val_loader, params, metrics,
-                       train_dataset.unique_labels, args)
+    logging.info("Calculating positive weights for loss for adv")
 
-    logging.info("="*80)
+    target_counts_adv = Counter(
+        chain.from_iterable(
+            train_dataset.targets_dict["adv"][v]
+            for v in train_dataset.idx.values()
+        )
+    )
+    logging.info(f"Number of positives for adv classes: {target_counts_adv}")
+
+    pos_weight_adv = [
+        (1.0 - target_counts_adv[k] * 1 / len(train_dataset))
+        * (len(train_dataset) * 1.0 / target_counts_adv.get(k, 1))
+        for k in train_dataset.unique_labels["adv"]
+    ]
+
+    pos_weight_adv = torch.FloatTensor(pos_weight_adv)
+    pos_weight_adv.to(args.device)
+    logging.info(
+        f"Calculated positive weights for advocates are: {pos_weight_adv}"
+    )
+    loss_adv = nn.BCEWithLogitsLoss(
+        reduction="sum", pos_weight=pos_weight_adv
+    ).to(args.device)
+
+    logging.info("Calculating positive weights for loss for area")
+
+    target_counts_area = Counter(
+        chain.from_iterable(
+            train_dataset.targets_dict["area"][v]
+            for v in train_dataset.idx.values()
+        )
+    )
+    logging.info(f"Number of positives for area classes: {target_counts_area}")
+
+    pos_weight_area = [
+        (1.0 - target_counts_area[k] * 1 / len(train_dataset))
+        * (len(train_dataset) * 1.0 / target_counts_area.get(k, 1))
+        for k in train_dataset.unique_labels["area"]
+    ]
+
+    pos_weight_area = torch.FloatTensor(pos_weight_area)
+    pos_weight_area.to(args.device)
+    logging.info(
+        f"Calculated positive weights for areaocates are: {pos_weight_area}"
+    )
+    loss_area = nn.BCEWithLogitsLoss(
+        reduction="sum", pos_weight=pos_weight_area
+    ).to(args.device)
+
+    loss_fn = {"area": loss_area, "adv": loss_adv}
+
+    train_and_evaluate(
+        model,
+        optimizer,
+        loss_fn,
+        multiTaskLoss,
+        train_loader,
+        train_check_loader,
+        val_loader,
+        params,
+        metrics,
+        train_dataset.unique_labels,
+        args,
+    )
+
+    logging.info("=" * 80)
 
 
 if __name__ == "__main__":

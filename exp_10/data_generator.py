@@ -62,8 +62,8 @@ class MultiTaskDataset(Dataset):
             torch.Tensor, torch.Tensor]:
         data = self._fetch_data(self._input_paths[self._idx[idx]])
         target_adv, target_area = self._fetch_targets(self._idx[idx])
-
-        return data, target_adv, target_area
+        flname = os.path.splitext(os.path.basename(self.idx[idx]))[0]
+        return data, target_adv, target_area, flname
 
     @property
     def unique_labels(self) -> dict[str, str]:
