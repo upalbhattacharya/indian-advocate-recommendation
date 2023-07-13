@@ -6,6 +6,6 @@
     -ulc /DATA/upal/Datasets/DHC/variations/new/var_4/area_act_chapter_section_info/dropped/present_areas.txt \
     -ula /DATA/upal/Datasets/DHC/variations/new/var_4/targets/dropped/selected_advs.txt \
     -p params_word2vec_200.json \
-    -n simple_mtl_area_adv_pred \
+    -n simple_mtl_area_adv_pred_with_activations \
     -en "allenai/longformer-base-4096" \
     -id 1 

@@ -60,8 +60,8 @@ def evaluate(
 
         y_pred_adv, y_pred_area = model(data)
 
-        y_pred_adv_acts = m(y_pred_adv.detach().data.cpu())
-        y_pred_area_acts = m(y_pred_area.detach().data.cpu())
+        y_pred_adv_acts = m(y_pred_adv)
+        y_pred_area_acts = m(y_pred_area)
 
         # Setting area prediction to zero for cases with no determined areas
         for t in range(len(target_area)):
@@ -82,7 +82,7 @@ def evaluate(
         loss_batch_area.append(loss_area.item())
 
         outputs_batch_adv = (
-            y_pred_adv_acts.numpy() > params.threshold
+            y_pred_adv_acts.detach().data.cpu().numpy() > params.threshold
         ).astype(np.int32)
 
         targets_batch_adv = (target_adv.detach().data.cpu().numpy()).astype(
@@ -92,10 +92,10 @@ def evaluate(
         accumulate_adv.update(outputs_batch_adv, targets_batch_adv)
 
         outputs_batch_area = (
-            y_pred_area_acts.numpy() > params.threshold
+            y_pred_area_acts.detach().data.cpu().numpy() > params.threshold
         ).astype(np.int32)
 
-        targets_batch_area = (target_area.detach.data.cpu().numpy()).astype(
+        targets_batch_area = (target_area.detach().data.cpu().numpy()).astype(
             np.int32
         )
 
@@ -111,7 +111,7 @@ def evaluate(
         for i, pred in zip(idx, pred_names_adv):
             preds_adv[i] = pred
 
-        for i, acts in zip(idx, y_pred_adv_acts.numpy()):
+        for i, acts in zip(idx, y_pred_adv_acts.detach().data.cpu().numpy()):
             activations_adv[i] = {
                 target: acts[j] for j, target in enumerate(target_names["adv"])
             }
@@ -126,7 +126,7 @@ def evaluate(
         for i, pred in zip(idx, pred_names_area):
             preds_area[i] = pred
 
-        for i, acts in zip(idx, y_pred_area_acts.numpy()):
+        for i, acts in zip(idx, y_pred_area_acts.detach().data.cpu().numpy()):
             activations_area[i] = {
                 target: acts[j]
                 for j, target in enumerate(target_names["area"])

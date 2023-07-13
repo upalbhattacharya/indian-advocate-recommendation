@@ -7,7 +7,7 @@
 
 import re
 from collections import OrderedDict
-from typing import Union
+from typing import Dict, List, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -25,7 +25,7 @@ class SimpleMultiTaskMultiLabelPrediction(nn.Module):
 
     def __init__(
         self,
-        labels: dict[str, list[str]],
+        labels: Dict[str, List[str]],
         max_length: int = 4096,
         truncation_side: str = "right",
         model_name: str = "allenai/longformer-base-4096",
@@ -158,10 +158,10 @@ class SimpleMultiTaskMultiLabelPrediction(nn.Module):
         return tokenized
 
     def forward(
-        self, x: list[str]
+        self, x: List[str]
     ) -> Union[
-        tuple[torch.Tensor, torch.Tensor],
-        tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
     ]:
         tokenized = self._process(x)
         tokenized = tokenized.to(self.device)

@@ -6,7 +6,8 @@
 import argparse
 import logging
 import os
-from itertools import Counter, chain
+from collections import Counter
+from itertools import chain
 
 import numpy as np
 import torch
@@ -82,9 +83,15 @@ def train_one_epoch(
             target_area_mod = target_area_mod.to(args.device)
 
         loss_adv = criterion["adv"](y_pred_adv.float(), target_adv.float())
-        loss_area = criterion["area"](
-            y_pred_area_mod.float(), target_area_mod.float()
-        )
+        if torch.numel(y_pred_area_mod) != 0:
+            loss_area = criterion["area"](
+                y_pred_area_mod.float(), target_area_mod.float()
+            )
+        else:
+            loss_area = criterion["area"](
+                torch.zeros(len(target_names["area"])).to(args.device),
+                torch.zeros(len(target_names["area"])).to(args.device),
+            )
         losses = torch.stack((loss_adv, loss_area))
         multi_task_loss = multiTaskLoss(losses)
         multi_task_loss.backward()
@@ -615,7 +622,7 @@ def main():
 
     target_counts_adv = Counter(
         chain.from_iterable(
-            train_dataset.targets_dict["adv"][v]
+            train_dataset.targets_dict[v]["adv"]
             for v in train_dataset.idx.values()
         )
     )
@@ -640,7 +647,7 @@ def main():
 
     target_counts_area = Counter(
         chain.from_iterable(
-            train_dataset.targets_dict["area"][v]
+            train_dataset.targets_dict[v]["area"]
             for v in train_dataset.idx.values()
         )
     )
@@ -655,7 +662,7 @@ def main():
     pos_weight_area = torch.FloatTensor(pos_weight_area)
     pos_weight_area.to(args.device)
     logging.info(
-        f"Calculated positive weights for areaocates are: {pos_weight_area}"
+        f"Calculated positive weights for areas are: {pos_weight_area}"
     )
     loss_area = nn.BCEWithLogitsLoss(
         reduction="sum", pos_weight=pos_weight_area
